@@ -1,0 +1,19 @@
+{
+  "name": "Buyer Contract Playbook",
+  "version": 1,
+  "rules": [
+    {
+      "code": "PAY-01",
+      "severity": "major",
+      "scope": "both",
+      "keys": ["payment_due_days"],
+      "text": "Payment terms must be at least 30 calendar days after receipt."
+    },
+    {
+      "code": "LIA-01",
+      "severity": "major",
+      "scope": "source",
+      "text": "Liability cap must not exceed USD 500,000 without legal approval."
+    }
+  ]
+}

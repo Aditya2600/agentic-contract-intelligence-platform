@@ -1,0 +1,70 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python Caches & Testing
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Build & Distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Node & Frontend (web/ & root)
+node_modules/
+web/node_modules/
+web/.next/
+web/dist/
+web/build/
+web/out/
+.next/
+.output/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Databases, Logs & Temporary Files
+*.sqlite
+*.sqlite3
+*.db
+*.log
+logs/
+tmp/
+temp/
+uploads/
+
+# Operating System & IDE
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

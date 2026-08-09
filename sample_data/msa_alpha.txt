@@ -1,0 +1,7 @@
+MASTER SERVICES AGREEMENT
+
+Agreement No.: MSA-2024-001
+
+This Master Services Agreement is entered into between Acme Buyer LLC and Northstar Vendor Inc, effective as of 2024-01-15.
+
+Payment is due within 30 calendar days of receipt. Liability is capped at $250,000.

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: doctask
+      POSTGRES_USER: doctask
+      POSTGRES_PASSWORD: doctask
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctask -d doctask"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - doctask_pg:/var/lib/postgresql/data
+
+volumes:
+  doctask_pg:

@@ -1,0 +1,22 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #171717; background: #f3f1eb; }
+body { margin: 0; }
+main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+header { border-bottom: 1px solid #bbb6aa; padding-bottom: 28px; }
+h1 { font-size: clamp(2.4rem, 7vw, 5rem); line-height: .95; max-width: 720px; margin: 10px 0 18px; }
+.eyebrow { letter-spacing: .18em; font-size: .72rem; font-weight: 700; }
+.toolbar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin: 28px 0; }
+input, button { font: inherit; padding: 12px 14px; border: 1px solid #171717; background: white; }
+button { cursor: pointer; font-weight: 700; }
+.cards { display: grid; gap: 16px; }
+article { background: white; border: 1px solid #c9c4b9; padding: 20px; box-shadow: 5px 5px 0 #171717; }
+.card-head { display: flex; justify-content: space-between; gap: 20px; }
+.card-head span { font-size: .7rem; letter-spacing: .08em; padding: 4px 7px; background: #ece8df; }
+blockquote { border-left: 3px solid #171717; margin-left: 0; padding-left: 14px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.commit { margin-top: 24px; width: 100%; background: #171717; color: white; }
+.result { margin-top: 24px; background: #171717; color: #f5f5f5; padding: 20px; overflow: auto; }
+@media (max-width: 700px) { .toolbar { grid-template-columns: 1fr; } }
+
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diff pre:first-child { opacity: 0.65; }
+@media (max-width: 640px) { .diff { grid-template-columns: 1fr; } }

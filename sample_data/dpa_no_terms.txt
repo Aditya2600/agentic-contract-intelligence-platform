@@ -1,0 +1,7 @@
+DATA PROCESSING ADDENDUM
+
+This Addendum governs the processing of personal data by the Processor on behalf of the Controller and adds no commercial terms to the Agreement.
+
+Processor aggregate liability for claims arising under this Addendum is limited to USD 750,000.
+
+The Processor shall notify the Controller of a personal data breach without undue delay.

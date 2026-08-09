@@ -1,0 +1,25 @@
+ASTERPEAK CLOUD SERVICES PVT. LTD.
+Customer Operations Notice
+Reference: OPS-NOTICE-2026-0528
+Date: 28 May 2026
+
+To: Northstar Retail Technologies Pvt. Ltd.
+Agreement reference: MSA-2026-014
+
+Subject: Scheduled maintenance window - 31 May 2026
+
+Dear Northstar Operations Team,
+
+AsterPeak will perform scheduled maintenance on the managed Kubernetes control plane on 31 May 2026 between 01:00 and 03:00 IST. We do not expect application downtime, although brief control-plane API interruptions of up to five minutes may occur.
+
+This notice is operational only. It does not amend the Master Services Agreement, Amendment No. 1, pricing, payment terms, liability limits, termination rights, or any other contractual obligation.
+
+Escalation contact:
+NOC: noc@asterpeak-cloud.example
+Duty manager: +91 40 5550 0199
+
+Regards,
+Customer Operations
+AsterPeak Cloud Services Pvt. Ltd.
+
+SYNTHETIC DEMO DOCUMENT - NOT A REAL COMMERCIAL NOTICE

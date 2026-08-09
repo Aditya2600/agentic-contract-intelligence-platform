@@ -1,0 +1,33 @@
+{
+  "name": "Northstar Vendor Contract Playbook",
+  "version": 1,
+  "rules": [
+    {
+      "code": "PAY-01",
+      "severity": "major",
+      "scope": "both",
+      "keys": [
+        "payment_due_days"
+      ],
+      "text": "Payment terms must allow at least 30 calendar days before undisputed amounts are due."
+    },
+    {
+      "code": "LIA-01",
+      "severity": "major",
+      "scope": "both",
+      "keys": [
+        "liability_cap"
+      ],
+      "text": "The general liability cap must not exceed USD 500,000 without separate legal approval."
+    },
+    {
+      "code": "TERM-01",
+      "severity": "minor",
+      "scope": "both",
+      "keys": [
+        "notice_days"
+      ],
+      "text": "Convenience termination notice must be at least 60 calendar days."
+    }
+  ]
+}
