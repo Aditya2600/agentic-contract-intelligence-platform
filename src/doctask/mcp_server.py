@@ -10,8 +10,15 @@ from mcp.server.auth.settings import AuthSettings
 
 from doctask.auth import AuthenticationError, Principal, authenticate, require_reviewer
 from doctask.config import settings
-from doctask.runtime import get_services, rederive_run, resume_run, start_run
-from doctask.services.rules import parse_ruleset
+from doctask.runtime import (
+    decide_reviewed_items,
+    get_run_status,
+    get_services,
+    install_ruleset,
+    override_run_blockers,
+    rederive_run,
+    start_run,
+)
 
 
 class DoctaskTokenVerifier:
@@ -69,11 +76,13 @@ def _reviewer() -> Principal:
 
 
 @mcp.tool()
-async def create_collection(name: str) -> dict:
-    """Create an isolated vendor-document collection."""
+async def create_collection(name: str, slug: str | None = None) -> dict:
+    """Create an isolated vendor-document collection, or return the existing one for
+    the same slug -- defaulted from `name` when omitted. The same slug with a
+    different name is refused rather than silently renamed."""
     _caller()
     services = await get_services()
-    collection_id = await services.repository.create_collection(name)
+    collection_id = await services.repository.create_collection(name, slug=slug)
     return {"collection_id": str(collection_id)}
 
 
@@ -129,40 +138,97 @@ async def list_review_items(run_id: str) -> list[dict]:
 async def decide_review_items(
     run_id: str,
     decisions: dict[str, str],
+    idempotency_key: str,
+    basis: dict[str, dict] | None = None,
+    document_type: str | None = None,
 ) -> dict:
-    """Explicitly approve or reject each item and resume the paused graph. Requires a
-    reviewer credential on the connection; the decision is recorded against that
-    reviewer, and there is no parameter for naming someone else."""
-    return await resume_run(
-        run_id=UUID(run_id), payload={"decisions": decisions}, principal=_reviewer()
+    """Explicitly approve or reject each item and resume the paused graph.
+
+    `basis` states, per item id, the `version`/`content_hash` or `basis_hash`/
+    `ruleset_hash` that item carried in the `list_review_items` response this decision
+    was made from (whichever pair that item's `payload` carries -- an
+    `injection_review` item carries neither and needs no entry). An item that has
+    moved since is refused rather than decided blind. `idempotency_key` makes a
+    retried call with the exact same decisions a no-op instead of a second decision;
+    reused with different decisions, it is refused.
+
+    Requires a reviewer credential on the connection; the decision is recorded against
+    that reviewer, and there is no parameter for naming someone else."""
+    return await decide_reviewed_items(
+        UUID(run_id),
+        {UUID(item_id): decision for item_id, decision in decisions.items()},
+        basis={UUID(item_id): entry for item_id, entry in (basis or {}).items()},
+        idempotency_key=idempotency_key,
+        principal=_reviewer(),
+        document_type=document_type,
     )
 
 
 @mcp.tool()
-async def override_blockers(run_id: str, override: bool, reason: str = "") -> dict:
+async def override_blockers(
+    run_id: str, override: bool, idempotency_key: str, reason: str = ""
+) -> dict:
     """Answer the blocker gate for a run whose commit is held by an upheld blocker
     finding. `override=false` leaves the run blocked and writes nothing. `override=true`
     requires a reason, which is recorded in the run's event log. Reviewer credential
-    only."""
-    return await resume_run(
-        run_id=UUID(run_id),
-        payload={"override": override, "reason": reason},
+    only. `idempotency_key` makes a retried call with the same answer a no-op; reused
+    with a different answer, it is refused."""
+    return await override_run_blockers(
+        UUID(run_id),
+        override=override,
+        reason=reason,
+        idempotency_key=idempotency_key,
         principal=_reviewer(),
     )
 
 
+@mcp.tool(name="get_run_status")
+async def get_run_status_tool(run_id: str) -> dict:
+    """What a run is doing right now: its status, and how many review items are still
+    pending. Reads stored state only -- no lease taken, no graph invoked."""
+    _caller()
+    status = await get_run_status(UUID(run_id))
+    if status is None:
+        raise ValueError(f"run {run_id} does not exist")
+    return status
+
+
 @mcp.tool()
-async def upload_ruleset(collection_id: str, playbook: dict) -> dict:
-    """Install or replace the playbook a collection is evaluated against."""
+async def list_register(collection_id: str) -> list[dict]:
+    """Every register row currently standing for a collection, one per agreement-scoped
+    obligation key."""
     _caller()
     services = await get_services()
-    stored = await services.repository.put_ruleset(
-        parse_ruleset(playbook, UUID(collection_id))
-    )
+    return [
+        asdict(item) for item in await services.repository.list_register(UUID(collection_id))
+    ]
+
+
+@mcp.tool()
+async def get_snapshot_diff(run_id: str) -> list[dict]:
+    """The register rows this run actually changed: old value, new value, both content
+    hashes. Empty for a run that never committed -- blocked, stale, or still open."""
+    _caller()
+    services = await get_services()
+    return [asdict(change) for change in await services.repository.list_run_changes(UUID(run_id))]
+
+
+@mcp.tool()
+async def put_ruleset(collection_id: str, playbook: dict, if_match: int | None = None) -> dict:
+    """Install the playbook a collection is evaluated against.
+
+    Content-idempotent: uploading exactly what is already active is a no-op and
+    returns it unchanged, at its existing version. Changed content needs `if_match`
+    set to the version being replaced -- read off a prior call's `version` field --
+    or the call is refused rather than guessing which version it was meant to
+    supersede."""
+    _caller()
+    stored, created = await install_ruleset(UUID(collection_id), playbook, if_match=if_match)
     return {
         "ruleset_id": str(stored.id),
         "version": stored.version,
         "rules": [rule.code for rule in stored.rules],
+        "created": created,
     }
 
 

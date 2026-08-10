@@ -6,7 +6,7 @@ from uuid import UUID
 
 from doctask.domain import OBLIGATION_KEYS, FindingCitation, Rule, Ruleset
 from doctask.llm.base import RuleExcerpt, RuleVerdict
-from doctask.services.hashing import sha256_text
+from doctask.services.hashing import canonical_json, sha256_text
 
 SEVERITIES = {"blocker", "major", "minor", "info"}
 SCOPES = {"source", "deliverable", "both"}
@@ -51,6 +51,33 @@ def ruleset_hash(ruleset: Ruleset) -> str:
     edited: `name v2` is a moving target, this is not.
     """
     return sha256_text(ruleset.source_text)
+
+
+def ruleset_content_hash(ruleset: Ruleset) -> str:
+    """Identity of what a playbook *says*, independent of its version or how it was
+    typed. `ruleset_hash` above hashes the raw uploaded payload -- right for pinning a
+    run to the exact bytes it was judged against, wrong for deciding whether a new
+    upload changed anything, since a re-upload that only omits or repeats a version
+    number would hash differently by that measure despite meaning the same thing. This
+    hashes the parsed, validated content instead: same name and same rules is the same
+    playbook, whatever the raw JSON looked like."""
+    return sha256_text(
+        canonical_json(
+            {
+                "name": ruleset.name,
+                "rules": [
+                    {
+                        "code": rule.code,
+                        "text": rule.text,
+                        "severity": rule.severity,
+                        "scope": rule.scope,
+                        "keys": sorted(rule.target_keys),
+                    }
+                    for rule in sorted(ruleset.rules, key=lambda rule: rule.code)
+                ],
+            }
+        )
+    )
 
 
 def parse_ruleset(payload: dict[str, Any], collection_id: UUID) -> Ruleset:

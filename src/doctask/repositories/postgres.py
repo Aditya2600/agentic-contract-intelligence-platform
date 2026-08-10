@@ -20,17 +20,20 @@ from doctask.domain import (
     FactScope,
     Finding,
     FindingCitation,
+    RegisterChange,
     RegisterItem,
     RegisterKey,
     ReviewItem,
     Rule,
     Ruleset,
     RunEvent,
+    RunSummary,
     StageRecord,
     StoredFact,
 )
-from doctask.repositories.base import stale_proposal
+from doctask.repositories.base import CollectionConflictError, stale_proposal
 from doctask.services.hashing import register_content_hash
+from doctask.services.ids import slugify
 
 
 def review_target_id(kind: str, target_key: str) -> UUID:
@@ -62,20 +65,32 @@ class PostgresRepository:
 
     # ------------------------------------------------------------------ collections
 
-    async def create_collection(self, name: str) -> UUID:
-        slug = name.lower().replace(" ", "-")
+    async def create_collection(self, name: str, *, slug: str | None = None) -> UUID:
+        slug = slug or slugify(name)
+        if not slug:
+            raise ValueError("collection needs a name or an explicit slug")
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
                 INSERT INTO collections(slug, name) VALUES (%s, %s)
-                ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+                ON CONFLICT (slug) DO NOTHING
                 RETURNING id
                 """,
                 (slug, name),
             )
             row = await cur.fetchone()
-            assert row is not None
-            return row["id"]
+            if row is not None:
+                return row["id"]
+            cur = await conn.execute(
+                "SELECT id, name FROM collections WHERE slug = %s", (slug,)
+            )
+            existing = await cur.fetchone()
+            assert existing is not None
+            if existing["name"] != name:
+                raise CollectionConflictError(
+                    f"collection slug {slug!r} already names {existing['name']!r}"
+                )
+            return existing["id"]
 
     # ------------------------------------------------------------------ runs
 
@@ -1515,6 +1530,51 @@ class PostgresRepository:
                 content_hash=row["content_hash"],
                 version=row["version"],
                 agreement_id=row["agreement_id"],
+            )
+            for row in rows
+        ]
+
+    async def get_run(self, run_id: UUID) -> RunSummary | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT id, collection_id, status, started_at, ended_at FROM runs WHERE id = %s",
+                (run_id,),
+            )
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        return RunSummary(
+            run_id=row["id"],
+            collection_id=row["collection_id"],
+            status=row["status"],
+            started_at=row["started_at"],
+            ended_at=row["ended_at"],
+        )
+
+    async def list_run_changes(self, run_id: UUID) -> list[RegisterChange]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT cl.register_item_id, ri.agreement_id, ri.key,
+                       cl.old_value, cl.new_value, cl.old_hash, cl.new_hash, cl.changed_at
+                  FROM change_log cl
+                  JOIN register_items ri ON ri.id = cl.register_item_id
+                 WHERE cl.run_id = %s
+                 ORDER BY cl.changed_at
+                """,
+                (run_id,),
+            )
+            rows = await cur.fetchall()
+        return [
+            RegisterChange(
+                run_id=run_id,
+                register_item_id=row["register_item_id"],
+                key=RegisterKey(row["agreement_id"], row["key"]).text,
+                old_value=row["old_value"],
+                new_value=row["new_value"],
+                old_hash=row["old_hash"],
+                new_hash=row["new_hash"],
+                changed_at=row["changed_at"],
             )
             for row in rows
         ]

@@ -530,3 +530,39 @@ class StaleProposal:
 class CommitResult:
     committed: list[RegisterItem] = field(default_factory=list)
     stale: list[StaleProposal] = field(default_factory=list)
+
+
+RunStatus = Literal[
+    "running", "awaiting_review", "committing", "committed", "blocked", "failed", "cancelled"
+]
+
+
+@dataclass(slots=True)
+class RunSummary:
+    """What a poller needs to know about a run without touching its checkpoint or
+    lease: whether it is still moving, parked for a human, or done."""
+
+    run_id: UUID
+    collection_id: UUID
+    status: RunStatus
+    started_at: datetime
+    ended_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class RegisterChange:
+    """One register row's value before and after a commit, and which run caused it.
+
+    This is `change_log` read back: the same evidence a live run's report proves
+    unaffected rows preserved byte-for-byte, addressable later by `run_id` alone so a
+    caller who only kept the run id can still ask "what did this actually change".
+    """
+
+    run_id: UUID
+    register_item_id: UUID
+    key: str
+    old_value: dict[str, Any] | None
+    new_value: dict[str, Any]
+    old_hash: str | None
+    new_hash: str
+    changed_at: datetime

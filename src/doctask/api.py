@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
@@ -14,15 +14,21 @@ from doctask.auth import (
     authenticate,
     require_reviewer,
 )
+from doctask.repositories.base import CollectionConflictError
 from doctask.runtime import (
+    IdempotencyConflictError,
+    RulesetConflictError,
     RunBusyError,
+    StaleDecisionError,
+    decide_reviewed_items,
+    get_run_status,
     get_services,
+    install_ruleset,
+    override_run_blockers,
     rederive_run,
-    resume_run,
     start_run,
 )
 from doctask.services.extraction import ExtractionError, extract_document
-from doctask.services.rules import parse_ruleset
 
 router = APIRouter()
 
@@ -60,6 +66,10 @@ Reviewer = Annotated[Principal, Depends(current_reviewer)]
 
 class CollectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    # Defaults to a normalised form of `name` (see `services.ids.slugify`). Repeating
+    # the same slug and name returns the existing collection; the same slug with a
+    # different name is refused rather than silently renamed.
+    slug: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class DocumentPayload(BaseModel):
@@ -86,12 +96,18 @@ class ReviewResume(BaseModel):
     # Answers the classification gate instead, when that is the gate the run is parked
     # at. Validated against the allowed types in the node.
     document_type: str | None = None
+    # What each decided item's version and basis hash looked like when this caller last
+    # read it via GET .../review-items. A mismatch means it moved since, and the
+    # decision is refused rather than applied against content nobody actually saw.
+    basis: dict[UUID, dict[str, Any]] = Field(default_factory=dict)
+    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 class BlockerOverride(BaseModel):
     override: bool
     # Required when override is true. Checked in the node too, which is the real gate.
     reason: str = ""
+    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 @router.get("/health")
@@ -104,7 +120,12 @@ async def create_collection(
     payload: CollectionCreate, principal: Caller
 ) -> dict[str, str]:
     services = await get_services()
-    collection_id = await services.repository.create_collection(payload.name)
+    try:
+        collection_id = await services.repository.create_collection(
+            payload.name, slug=payload.slug
+        )
+    except CollectionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"collection_id": str(collection_id)}
 
 
@@ -168,21 +189,31 @@ async def upload_run(
 
 @router.put("/collections/{collection_id}/ruleset")
 async def put_ruleset(
-    collection_id: UUID, payload: dict, principal: Caller
+    collection_id: UUID,
+    payload: dict,
+    principal: Caller,
+    if_match: Annotated[int | None, Header(alias="If-Match")] = None,
 ) -> dict:
     """Upload a playbook. Rules are configuration: a new version changes behaviour
-    without a code change."""
-    services = await get_services()
+    without a code change.
+
+    Content-idempotent: uploading exactly what is already active is a no-op and
+    returns it unchanged. Changed content needs `If-Match` set to the version being
+    replaced -- read it off a prior response's `version` field -- or a 409 refuses the
+    upload rather than guessing which version the caller meant to supersede.
+    """
     try:
-        ruleset = parse_ruleset(payload, collection_id)
+        stored, created = await install_ruleset(collection_id, payload, if_match=if_match)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    stored = await services.repository.put_ruleset(ruleset)
+    except RulesetConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "ruleset_id": str(stored.id),
         "name": stored.name,
         "version": stored.version,
         "rules": [rule.code for rule in stored.rules],
+        "created": created,
     }
 
 
@@ -229,19 +260,19 @@ async def resume(
     run_id: UUID, payload: ReviewResume, reviewer: Reviewer
 ) -> dict:
     try:
-        return await resume_run(
+        return await decide_reviewed_items(
             run_id,
-            {
-                "decisions": {str(key): value for key, value in payload.decisions.items()},
-                "document_type": payload.document_type,
-            },
+            payload.decisions,
+            basis=payload.basis,
+            idempotency_key=payload.idempotency_key,
             principal=reviewer,
+            document_type=payload.document_type,
         )
     except RunBusyError as exc:
         # Another process holds the run's lease. Retrying is the right response, and it
         # is a different answer from "your decision was rejected".
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (KeyError, ValueError) as exc:
+    except (IdempotencyConflictError, StaleDecisionError, KeyError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -253,10 +284,38 @@ async def override_blockers(
     nothing; `override: true` needs a reason, which lands in the run's event log under
     the reviewer who presented the credential."""
     try:
-        return await resume_run(run_id, payload.model_dump(), principal=reviewer)
+        return await override_run_blockers(
+            run_id,
+            override=payload.override,
+            reason=payload.reason,
+            idempotency_key=payload.idempotency_key,
+            principal=reviewer,
+        )
     except RunBusyError as exc:
         # Another process holds the run's lease. Retrying is the right response, and it
         # is a different answer from "your decision was rejected".
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (KeyError, ValueError) as exc:
+    except (IdempotencyConflictError, KeyError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/status")
+async def get_status(run_id: UUID, principal: Caller) -> dict:
+    status = await get_run_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} does not exist")
+    return status
+
+
+@router.get("/collections/{collection_id}/register")
+async def get_register(collection_id: UUID, principal: Caller) -> list[dict]:
+    services = await get_services()
+    return [asdict(item) for item in await services.repository.list_register(collection_id)]
+
+
+@router.get("/runs/{run_id}/changes")
+async def get_run_changes(run_id: UUID, principal: Caller) -> list[dict]:
+    """The register rows this run actually changed: old value, new value, both hashes.
+    Empty for a run that never committed -- blocked, stale, or still open."""
+    services = await get_services()
+    return [asdict(change) for change in await services.repository.list_run_changes(run_id)]

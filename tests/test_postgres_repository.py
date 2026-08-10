@@ -259,6 +259,43 @@ async def test_commit_is_replay_safe_and_versions_the_register(repo) -> None:
     assert second_commit[0].content_hash != committed[0].content_hash
 
 
+async def test_get_run_and_list_run_changes_reflect_a_commit(repo) -> None:
+    """What the MCP/REST read tools show a caller who only holds a run id."""
+    collection_id = await repo.create_collection(f"pg-run-summary-{uuid4()}")
+    run_id, _ = await repo.create_run(
+        collection_id=collection_id, run_id=uuid4(), idempotency_key=str(uuid4())
+    )
+
+    running = await repo.get_run(run_id)
+    assert running is not None
+    assert (running.collection_id, running.status, running.ended_at) == (
+        collection_id,
+        "running",
+        None,
+    )
+    assert await repo.list_run_changes(run_id) == []
+
+    document, _, candidate = await _seeded_fact(repo, collection_id, run_id)
+    await _approved_item(repo, run_id, candidate, document.id)
+    committed = (
+        await repo.commit_approved(collection_id, run_id, basis_hash=_basis(run_id))
+    ).committed
+
+    done = await repo.get_run(run_id)
+    assert done is not None
+    assert done.status == "committed"
+    assert done.ended_at is not None
+
+    changes = await repo.list_run_changes(run_id)
+    assert [(c.key, c.old_value, c.new_value, c.old_hash) for c in changes] == [
+        (_scoped("payment_due_days"), None, {"days": 30}, None)
+    ]
+    assert changes[0].new_hash == committed[0].content_hash
+    assert changes[0].register_item_id == committed[0].id
+
+    assert await repo.get_run(uuid4()) is None
+
+
 async def test_a_stale_proposal_is_refused_instead_of_overwriting(repo) -> None:
     """Two runs derive from the same empty slot; only the first may commit.
 

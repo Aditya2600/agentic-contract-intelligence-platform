@@ -77,6 +77,49 @@ async def test_a_stale_proposal_is_refused_instead_of_overwriting() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_run_and_list_run_changes_reflect_a_commit() -> None:
+    repo = InMemoryRepository()
+    collection_id = await repo.create_collection("run-summary")
+    run_id, _ = await repo.create_run(
+        collection_id=collection_id, run_id=uuid4(), idempotency_key=str(uuid4())
+    )
+
+    running = await repo.get_run(run_id)
+    assert running is not None
+    assert (running.collection_id, running.status, running.ended_at) == (
+        collection_id,
+        "running",
+        None,
+    )
+    assert await repo.list_run_changes(run_id) == []
+
+    item = ReviewItem(
+        run_id=run_id,
+        kind="register_update",
+        target_key="payment_due_days",
+        payload={"before": None, "after": {"value": {"days": 30}, "state": "supported"}},
+    )
+    await repo.add_review_items([item])
+    await repo.decide_review_items(run_id, "human-1", {item.id: "approved"})
+    committed = (
+        await repo.commit_approved(collection_id, run_id, basis_hash=_basis(run_id))
+    ).committed
+
+    done = await repo.get_run(run_id)
+    assert done is not None
+    assert done.status == "committed"
+    assert done.ended_at is not None
+
+    changes = await repo.list_run_changes(run_id)
+    assert [(c.key, c.old_value, c.new_value, c.old_hash) for c in changes] == [
+        ("::payment_due_days", None, {"days": 30}, None)
+    ]
+    assert changes[0].new_hash == committed[0].content_hash
+
+    assert await repo.get_run(uuid4()) is None
+
+
+@pytest.mark.asyncio
 async def test_review_decision_is_compare_and_set() -> None:
     repo = InMemoryRepository()
     run_id = uuid4()

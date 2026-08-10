@@ -203,6 +203,24 @@ def _upload(client: TestClient, collection_id: str, data: bytes, name: str) -> d
     return response.json()
 
 
+def _basis_of(item) -> dict:
+    """What `/resume` requires the caller to echo back for this item, read straight
+    off its payload -- the same thing a real caller would read from the JSON
+    `GET .../review-items` already returned them."""
+    if item.kind in {"register_update", "conflict", "scope_question"}:
+        before = item.payload.get("before")
+        return {
+            "version": before.get("version") if before else None,
+            "content_hash": before.get("content_hash") if before else None,
+        }
+    if item.kind in {"finding", "deliverable_confirmation"}:
+        return {
+            "basis_hash": item.payload.get("basis_hash"),
+            "ruleset_hash": item.payload.get("ruleset_hash"),
+        }
+    return {}
+
+
 async def _finish(client: TestClient, body: dict) -> dict:
     """Approve everything a human is asked about, and return the run's report."""
     run_id = body["run_id"]
@@ -214,16 +232,20 @@ async def _finish(client: TestClient, body: dict) -> dict:
         interrupt = result["__interrupt__"][0]
         gate = (interrupt["value"] if isinstance(interrupt, dict) else interrupt.value)["kind"]
         if gate == "document_classification":
-            payload = {"document_type": "master_agreement"}
+            payload = {"document_type": "master_agreement", "idempotency_key": str(uuid4())}
         elif gate == "blocker_override":
-            payload = {"override": False, "reason": ""}
+            payload = {"override": False, "reason": "", "idempotency_key": str(uuid4())}
         else:
             pending = [
                 item
                 for item in await services.repository.list_review_items(UUID(run_id))
                 if item.state == "pending"
             ]
-            payload = {"decisions": {str(item.id): "approved" for item in pending}}
+            payload = {
+                "decisions": {str(item.id): "approved" for item in pending},
+                "basis": {str(item.id): _basis_of(item) for item in pending},
+                "idempotency_key": str(uuid4()),
+            }
         endpoint = "override" if gate == "blocker_override" else "resume"
         response = client.post(f"/api/runs/{run_id}/{endpoint}", json=payload, headers=reviewer)
         assert response.status_code == 200, response.text

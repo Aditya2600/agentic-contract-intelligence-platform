@@ -188,14 +188,15 @@ ingest                 (upload extracts + OCRs before this; JSON route posts tex
 classify
   ├─ confidence < 0.70 ──────────────────────► classify_review (interrupt)
   ▼
-parse_blocks
+parse_blocks           (every block scanned here, at the block boundary: injection_flag
+  │                     set per block, never per document)
   ▼
 link_documents        (amends / governed_by / supersedes / references, each with the
   │                    sentence claiming it; scopes this document's facts to an agreement)
   ▼
-detect_injection
+detect_injection       (surfaces what parse_blocks found; never routes on a clean scan)
   ▼
-extract_facts
+extract_facts          (flagged blocks are never sent to the model)
   ▼
 validate_citations    (quote is verbatim; value matches the quote's number/unit, date,
   │                    polarity and anchor; qualifiers and exceptions are inside the quote)
@@ -374,6 +375,16 @@ and catch a repository that drops rows.
 
 1. Every side-effecting node must be idempotent independently of graph checkpointing.
 2. Document text is untrusted data and never gets authority to approve proposals.
+   `services/injection.py` scans every block for imperatives aimed at whatever reads
+   it — plain text, Unicode/zero-width obfuscation, text hidden in HTML/Markdown
+   markup — but a clean scan grants nothing: detection is telemetry, never permission.
+   The actual boundary is that the model is handed structured block data and no
+   database, approval, or tool credential, ever, flagged or not. A block that scans
+   suspicious is withheld — from extraction, from rule context, from every register
+   update — while the rest of the document is processed normally, so one hostile
+   paragraph cannot deny service to the other fifty-nine. Withholding raises an
+   `injection_review` item that starts `pending` like any other, and the report names
+   the block and why under `report["injection"]`.
 3. Review decisions are item-level state transitions, and only an authenticated human
    makes one. The model and the automation produce proposals and findings; every one of
    them lands `pending`. `decided_by` is the identity behind the presented credential,

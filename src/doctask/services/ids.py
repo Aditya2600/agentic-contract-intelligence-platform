@@ -3,6 +3,13 @@ from __future__ import annotations
 from uuid import NAMESPACE_OID, UUID, uuid5
 
 
+def slugify(name: str) -> str:
+    """The client-facing identity of a collection: stable across repeats of the same
+    name, so `create_collection` can be idempotent on it without a caller having to
+    mint and remember a UUID themselves."""
+    return name.strip().lower().replace(" ", "-")
+
+
 def target_uuid(kind: str, key: str) -> UUID:
     """Stable UUID for a text-keyed target.
 

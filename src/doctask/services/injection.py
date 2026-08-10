@@ -31,8 +31,12 @@ from dataclasses import dataclass, field
 # attack, but it is the standard way one is hidden from the human who approves it: the
 # reviewer reads "Payment is due in 30 days" and the model reads that plus an instruction
 # spelled through zero-width joiners. Both the obfuscation and what it hides are reported.
+# Written as \u escapes, not literal characters, so the source file itself carries none
+# of the bytes this module exists to catch (soft hyphen, zero-width space/non-joiner/
+# joiner, LRM/RLM and the bidi embedding/override/isolate controls, word joiner and the
+# deprecated inhibit-symmetric-swapping block, Mongolian vowel separator, BOM/ZWNBSP).
 _INVISIBLE = re.compile(
-    r"[­​-‏‪-‮⁠-⁤⁪-⁯﻿᠎]"
+    "[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u206A-\u206F\uFEFF]"
 )
 # Tags Unicode intends for language tagging, routinely used to smuggle ASCII invisibly.
 _TAG_CHARS = re.compile(r"[\U000e0000-\U000e007f]")

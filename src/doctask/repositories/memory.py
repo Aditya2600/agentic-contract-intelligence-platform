@@ -13,21 +13,25 @@ from doctask.domain import (
     DocumentRelation,
     FactCandidate,
     Finding,
+    RegisterChange,
     RegisterItem,
     RegisterKey,
     ReviewItem,
     Ruleset,
     RunEvent,
+    RunSummary,
     StageRecord,
     StoredFact,
 )
-from doctask.repositories.base import stale_proposal
+from doctask.repositories.base import CollectionConflictError, stale_proposal
 from doctask.services.hashing import register_content_hash
+from doctask.services.ids import slugify
 
 
 class InMemoryRepository:
     def __init__(self) -> None:
         self.collections: dict[UUID, str] = {}
+        self.collection_by_slug: dict[str, UUID] = {}
         self.documents: dict[UUID, Document] = {}
         self.document_by_sha: dict[tuple[UUID, str], UUID] = {}
         self.supersedes: dict[UUID, UUID] = {}
@@ -45,16 +49,34 @@ class InMemoryRepository:
         self.source_rule_cache: dict[str, UUID] = {}
         self.runs: dict[tuple[UUID, str], UUID] = {}
         self.run_status: dict[UUID, str] = {}
+        self.run_collection: dict[UUID, UUID] = {}
+        self.run_started: dict[UUID, datetime] = {}
+        self.run_ended: dict[UUID, datetime] = {}
+        # run_id -> the register rows that run's own commit actually changed.
+        self.change_log: dict[UUID, list[RegisterChange]] = defaultdict(list)
         # (run_id, stage, input_hash) -> what that work produced.
         self.stage_ledger: dict[tuple[UUID, str, str], StageRecord] = {}
         # run_id -> (owner, expires_at). One driver per LangGraph thread at a time.
         self.leases: dict[UUID, tuple[str, datetime]] = {}
         self._lock = asyncio.Lock()
 
-    async def create_collection(self, name: str) -> UUID:
-        collection_id = uuid4()
-        self.collections[collection_id] = name
-        return collection_id
+    async def create_collection(self, name: str, *, slug: str | None = None) -> UUID:
+        slug = slug or slugify(name)
+        if not slug:
+            raise ValueError("collection needs a name or an explicit slug")
+        async with self._lock:
+            existing_id = self.collection_by_slug.get(slug)
+            if existing_id is not None:
+                if self.collections[existing_id] != name:
+                    raise CollectionConflictError(
+                        f"collection slug {slug!r} already names "
+                        f"{self.collections[existing_id]!r}"
+                    )
+                return existing_id
+            collection_id = uuid4()
+            self.collections[collection_id] = name
+            self.collection_by_slug[slug] = collection_id
+            return collection_id
 
     async def create_run(
         self, *, collection_id: UUID, run_id: UUID, idempotency_key: str, trigger: str = "api"
@@ -66,10 +88,13 @@ class InMemoryRepository:
                 return existing, True
             self.runs[key] = run_id
             self.run_status[run_id] = "running"
+            self.run_collection[run_id] = collection_id
+            self.run_started[run_id] = datetime.now(UTC)
             return run_id, False
 
     async def block_run(self, run_id: UUID, reason: str) -> None:
         self.run_status[run_id] = "blocked"
+        self.run_ended[run_id] = datetime.now(UTC)
 
     async def put_document(self, document: Document) -> tuple[Document, bool]:
         key = (document.collection_id, document.sha256)
@@ -493,6 +518,7 @@ class InMemoryRepository:
                 ]
                 return result
         self.run_status[run_id] = "committed"
+        self.run_ended[run_id] = datetime.now(UTC)
         async with self._lock:
             for review in self.review_items.values():
                 if review.run_id != run_id or review.state != "approved":
@@ -543,6 +569,18 @@ class InMemoryRepository:
                 )
                 self.register[(collection_id, scoped.text)] = item
                 committed.append(item)
+                self.change_log[run_id].append(
+                    RegisterChange(
+                        run_id=run_id,
+                        register_item_id=item.id,
+                        key=scoped.text,
+                        old_value=existing.value if existing else None,
+                        new_value=value,
+                        old_hash=existing.content_hash if existing else None,
+                        new_hash=content_hash,
+                        changed_at=datetime.now(UTC),
+                    )
+                )
 
                 conflict = review.payload.get("conflict")
                 if conflict:
@@ -569,3 +607,20 @@ class InMemoryRepository:
             [item for (cid, _), item in self.register.items() if cid == collection_id],
             key=lambda item: (item.agreement_id, item.key),
         )
+
+    async def get_run(self, run_id: UUID) -> RunSummary | None:
+        status = self.run_status.get(run_id)
+        collection_id = self.run_collection.get(run_id)
+        started_at = self.run_started.get(run_id)
+        if status is None or collection_id is None or started_at is None:
+            return None
+        return RunSummary(
+            run_id=run_id,
+            collection_id=collection_id,
+            status=status,  # type: ignore[arg-type]
+            started_at=started_at,
+            ended_at=self.run_ended.get(run_id),
+        )
+
+    async def list_run_changes(self, run_id: UUID) -> list[RegisterChange]:
+        return list(self.change_log.get(run_id, []))

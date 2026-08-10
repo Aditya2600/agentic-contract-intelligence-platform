@@ -189,12 +189,15 @@ def test_the_api_refuses_decisions_without_a_reviewer_credential(client) -> None
     ).json()
     decisions = {item["id"]: "approved" for item in items}
 
-    anonymous = client.post(f"/api/runs/{run_id}/resume", json={"decisions": decisions})
+    anonymous = client.post(
+        f"/api/runs/{run_id}/resume",
+        json={"decisions": decisions, "idempotency_key": str(uuid4())},
+    )
     assert anonymous.status_code == 401
 
     wrong_scheme = client.post(
         f"/api/runs/{run_id}/resume",
-        json={"decisions": decisions},
+        json={"decisions": decisions, "idempotency_key": str(uuid4())},
         headers={"Authorization": REVIEWER_TOKEN},
     )
     assert wrong_scheme.status_code == 401
@@ -202,7 +205,7 @@ def test_the_api_refuses_decisions_without_a_reviewer_credential(client) -> None
     # Authenticates fine, and is still refused: a service is not a human.
     as_service = client.post(
         f"/api/runs/{run_id}/resume",
-        json={"decisions": decisions},
+        json={"decisions": decisions, "idempotency_key": str(uuid4())},
         headers={"Authorization": f"Bearer {SERVICE_TOKEN}"},
     )
     assert as_service.status_code == 403
@@ -217,7 +220,7 @@ def test_the_api_refuses_decisions_without_a_reviewer_credential(client) -> None
 
 def test_the_override_gate_is_reviewer_only(client) -> None:
     run_id = _start_run(client)
-    body = {"override": True, "reason": "counsel signed off"}
+    body = {"override": True, "reason": "counsel signed off", "idempotency_key": str(uuid4())}
 
     assert client.post(f"/api/runs/{run_id}/override", json=body).status_code == 401
     assert (
@@ -228,6 +231,21 @@ def test_the_override_gate_is_reviewer_only(client) -> None:
         ).status_code
         == 403
     )
+
+
+def _basis_for(item: dict) -> dict:
+    """What `/resume` requires echoed back, read off the same JSON `GET
+    .../review-items` already returned -- exactly what a real caller has in hand."""
+    payload = item["payload"]
+    if item["kind"] in {"register_update", "conflict", "scope_question"}:
+        before = payload.get("before")
+        return {
+            "version": before.get("version") if before else None,
+            "content_hash": before.get("content_hash") if before else None,
+        }
+    if item["kind"] in {"finding", "deliverable_confirmation"}:
+        return {"basis_hash": payload.get("basis_hash"), "ruleset_hash": payload.get("ruleset_hash")}
+    return {}
 
 
 def test_a_decision_is_recorded_against_the_credential_not_the_request(client) -> None:
@@ -243,6 +261,8 @@ def test_a_decision_is_recorded_against_the_credential_not_the_request(client) -
         f"/api/runs/{run_id}/resume",
         json={
             "decisions": {item["id"]: "approved" for item in items},
+            "basis": {item["id"]: _basis_for(item) for item in items},
+            "idempotency_key": str(uuid4()),
             "actor_id": "someone-else",
         },
         headers={"Authorization": f"Bearer {REVIEWER_TOKEN}"},

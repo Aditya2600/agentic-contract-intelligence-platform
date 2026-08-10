@@ -11,14 +11,25 @@ from doctask.domain import (
     DocumentRelation,
     FactCandidate,
     Finding,
+    RegisterChange,
     RegisterItem,
     ReviewItem,
     Ruleset,
     RunEvent,
+    RunSummary,
     StageRecord,
     StaleProposal,
     StoredFact,
 )
+
+
+class CollectionConflictError(ValueError):
+    """A collection slug already names something else.
+
+    Raised instead of silently renaming the existing row: a caller who repeats their
+    own request must get the same collection back, but a caller who reuses somebody
+    else's slug by accident needs to find out, not overwrite their name.
+    """
 
 
 def stale_proposal(
@@ -53,7 +64,10 @@ def stale_proposal(
 
 
 class Repository(Protocol):
-    async def create_collection(self, name: str) -> UUID: ...
+    # `slug` defaults to a normalised form of `name` (see `services.ids.slugify`) when
+    # omitted. Same slug, same name: returns the existing collection. Same slug, a
+    # different name: raises `CollectionConflictError` rather than renaming it.
+    async def create_collection(self, name: str, *, slug: str | None = None) -> UUID: ...
     async def create_run(
         self,
         *,
@@ -160,3 +174,9 @@ class Repository(Protocol):
         self, collection_id: UUID, run_id: UUID, *, basis_hash: str
     ) -> CommitResult: ...
     async def list_register(self, collection_id: UUID) -> list[RegisterItem]: ...
+    # --- read access for callers that only hold a run id -----------------------
+    async def get_run(self, run_id: UUID) -> RunSummary | None: ...
+    # The register rows this run actually changed: old value, new value, both hashes.
+    # Sourced from `change_log`, written in the same transaction as the commit that
+    # produced it, so this never disagrees with what was actually written.
+    async def list_run_changes(self, run_id: UUID) -> list[RegisterChange]: ...

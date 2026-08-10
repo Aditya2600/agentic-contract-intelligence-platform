@@ -13,11 +13,14 @@ from langgraph.types import Command
 
 from doctask.auth import Principal, require_reviewer
 from doctask.config import settings
+from doctask.domain import ReviewItem, Ruleset
 from doctask.graph.builder import build_graph
 from doctask.graph.nodes import NodeDependencies
 from doctask.llm.base import ModelGateway
 from doctask.llm.fake import FakeLLM
 from doctask.repositories.base import Repository
+from doctask.services.hashing import stage_input_hash
+from doctask.services.rules import parse_ruleset, ruleset_content_hash
 
 
 @dataclass(slots=True)
@@ -246,3 +249,183 @@ async def resume_run(run_id: UUID, payload: dict, *, principal: Principal) -> di
         return await services.graph.ainvoke(
             Command(resume={**payload, **principal.as_payload()}), config=config
         )
+
+
+class IdempotencyConflictError(RuntimeError):
+    """The same idempotency key was reused for a call with different arguments."""
+
+
+class StaleDecisionError(RuntimeError):
+    """A decision's stated version or basis hash no longer matches what is stored."""
+
+
+async def _claim_idempotency_key(
+    repository: Repository, run_id: UUID, tool: str, idempotency_key: str, *fingerprint: Any
+) -> None:
+    """Refuse a reused key unless it is describing the exact same call.
+
+    Reuses the stage ledger every node in the graph already ledgers exact-once work
+    into (`record_stage`/`stage_record`, keyed on `(run_id, stage, input_hash)`), rather
+    than standing up a second dedup table: a resume-tool call is exact-once work in
+    precisely the sense that ledger already exists to prove.
+    """
+    fingerprint_hash = stage_input_hash(*fingerprint)
+    existing = await repository.stage_record(run_id, tool, idempotency_key)
+    if existing is not None and existing.output_hash != fingerprint_hash:
+        raise IdempotencyConflictError(
+            f"idempotency key {idempotency_key!r} was already used for a different {tool} call"
+        )
+    await repository.record_stage(
+        run_id, tool, input_hash=idempotency_key, output_hash=fingerprint_hash
+    )
+
+
+def _review_item_basis(item: ReviewItem) -> dict[str, Any]:
+    """What a caller has to prove they read before they may decide this item.
+
+    `register_update` / `conflict` / `scope_question` items are a decision about one
+    register row: the basis is that row's version and content hash at proposal time,
+    already carried in `payload["before"]`. `finding` / `deliverable_confirmation`
+    items are a decision about the whole candidate register a deliverable rule was
+    judged against: the basis is that run-wide hash, already stamped into every such
+    item's payload by `_decision_binding`. `injection_review` items bind to nothing
+    mutable -- the block they are about does not change under them -- so they carry no
+    basis to check.
+    """
+    if item.kind in {"register_update", "conflict", "scope_question"}:
+        before = item.payload.get("before")
+        return {
+            "version": before.get("version") if before else None,
+            "content_hash": before.get("content_hash") if before else None,
+        }
+    if item.kind in {"finding", "deliverable_confirmation"}:
+        return {
+            "basis_hash": item.payload.get("basis_hash"),
+            "ruleset_hash": item.payload.get("ruleset_hash"),
+        }
+    return {}
+
+
+async def decide_reviewed_items(
+    run_id: UUID,
+    decisions: dict[UUID, str],
+    *,
+    basis: dict[UUID, dict[str, Any]],
+    idempotency_key: str,
+    principal: Principal,
+    document_type: str | None = None,
+) -> dict:
+    """Approve or reject review items -- the one path both REST and MCP call.
+
+    Every decision states, per item, the version and basis hash the caller read it
+    under. An item whose basis has moved since -- another reviewer decided it, a
+    concurrent run replaced the candidate register -- is refused here, before anything
+    is applied, instead of surfacing three stages later as a stale commit nobody
+    connects back to this call.
+    """
+    services = await get_services()
+    items = {item.id: item for item in await services.repository.list_review_items(run_id)}
+    for item_id in decisions:
+        item = items.get(item_id)
+        if item is None:
+            raise ValueError(f"review item {item_id} does not exist for run {run_id}")
+        expected = _review_item_basis(item)
+        if expected and basis.get(item_id) != expected:
+            raise StaleDecisionError(
+                f"review item {item_id} ({item.kind} {item.target_key}) has moved since "
+                "it was last read; call list_review_items again and decide against that"
+            )
+    await _claim_idempotency_key(
+        services.repository,
+        run_id,
+        "decide_review_items",
+        idempotency_key,
+        sorted((str(item_id), decision) for item_id, decision in decisions.items()),
+        document_type,
+    )
+    return await resume_run(
+        run_id,
+        {
+            "decisions": {str(item_id): decision for item_id, decision in decisions.items()},
+            "document_type": document_type,
+        },
+        principal=principal,
+    )
+
+
+async def override_run_blockers(
+    run_id: UUID, *, override: bool, reason: str, idempotency_key: str, principal: Principal
+) -> dict:
+    """Answer the blocker gate -- the one path both REST and MCP call."""
+    services = await get_services()
+    await _claim_idempotency_key(
+        services.repository, run_id, "override_blockers", idempotency_key, override, reason
+    )
+    return await resume_run(
+        run_id, {"override": override, "reason": reason}, principal=principal
+    )
+
+
+async def get_run_status(run_id: UUID) -> dict | None:
+    """What a poller needs, from a run id alone: no lease taken, no graph touched.
+
+    `runs.status` only ever moves to `blocked` or `committed`; a run parked on a human
+    gate is still `running` there; the checkpoint that would say `awaiting_review` is
+    not something this can read without the lease a live resume needs. Pending review
+    items are the same fact from the other table, so that is what stands in for it.
+    """
+    services = await get_services()
+    summary = await services.repository.get_run(run_id)
+    if summary is None:
+        return None
+    items = await services.repository.list_review_items(run_id)
+    pending = [item for item in items if item.state == "pending"]
+    status = "awaiting_review" if summary.status == "running" and pending else summary.status
+    return {
+        "run_id": str(summary.run_id),
+        "collection_id": str(summary.collection_id),
+        "status": status,
+        "started_at": summary.started_at.isoformat(),
+        "ended_at": summary.ended_at.isoformat() if summary.ended_at else None,
+        "pending_review_items": len(pending),
+    }
+
+
+class RulesetConflictError(RuntimeError):
+    """A ruleset upload changed content without proving it knew the current version."""
+
+
+async def install_ruleset(
+    collection_id: UUID, payload: dict, *, if_match: int | None = None
+) -> tuple[Ruleset, bool]:
+    """Install a playbook once, by what it says -- the one path both REST and MCP call.
+
+    Same content as what is already active is a no-op: it returns the stored ruleset
+    unchanged, at its existing version, and writes nothing. Changed content has to name
+    the version it is replacing (`if_match`), the same compare-and-swap shape used for a
+    review decision's basis -- an upload that never read the current playbook must not
+    silently become the next version of one it does not know it is replacing. The
+    version returned is always server-assigned; whatever version the payload itself
+    claimed is discarded.
+    """
+    candidate = parse_ruleset(payload, collection_id)
+    services = await get_services()
+    active = await services.repository.get_active_ruleset(collection_id)
+    if active is not None and ruleset_content_hash(active) == ruleset_content_hash(candidate):
+        return active, False
+    if active is None:
+        candidate.version = 1
+    else:
+        if if_match is None:
+            raise RulesetConflictError(
+                f"collection already has ruleset {active.name!r} at version "
+                f"{active.version}; supply if_match={active.version} to replace it"
+            )
+        if if_match != active.version:
+            raise RulesetConflictError(
+                f"if_match={if_match} does not match the current version "
+                f"({active.version}); re-fetch it and try again"
+            )
+        candidate.version = active.version + 1
+    stored = await services.repository.put_ruleset(candidate)
+    return stored, True
