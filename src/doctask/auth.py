@@ -91,6 +91,23 @@ def require_reviewer(principal: Principal) -> Principal:
     return principal
 
 
+def require_service(principal: Principal) -> Principal:
+    """The other half of the separation, enforced from the automation's side.
+
+    Ingestion automation -- the watcher -- must run as something that *cannot* decide.
+    Handing it a reviewer credential would give a background process the standing of a
+    human, and every run it started would be attributable to a person who never saw the
+    document. So a reviewer token is refused here rather than quietly accepted as "more
+    than enough permission".
+    """
+    if principal.is_reviewer:
+        raise AuthorizationError(
+            f"{principal.actor_id} is a {principal.role}: automation must present a "
+            "service credential, so nothing it starts can be recorded as a human act"
+        )
+    return principal
+
+
 def reviewer_from_payload(payload: dict[str, Any]) -> Principal:
     """The reviewer a resume payload was stamped with, or an error.
 

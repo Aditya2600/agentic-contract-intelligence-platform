@@ -1,0 +1,13 @@
+.venv
+.git
+.serena
+__pycache__
+*.pyc
+tests
+web/node_modules
+watched
+sample_data
+realistic_synthetic_demo_pack
+*.pdf
+*.docx
+.env

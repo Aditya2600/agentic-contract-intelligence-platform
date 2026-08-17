@@ -1,0 +1,19 @@
+sd_approve              Approve or deny proposed changes
+sd_awaiting_kind        What a paused job is waiting for
+sd_budget               Cap what a client may spend
+sd_cancel               Cancel a running job
+sd_changes              Read the changes a job proposes
+sd_client               Create a SuperDocs client
+sd_continue             Answer a large-edit continue prompt
+sd_deny                 Deny proposed changes
+sd_document             A document open in a SuperDocs session
+sd_edit                 Ask SuperDocs to edit a document
+sd_export               Export a document to a file
+sd_job                  A SuperDocs async job
+sd_knit                 Render an R Markdown paper and edit it through
+                        SuperDocs
+sd_ops_used             Operations spent and left on a client
+sd_review_console       Review helpers for sd_knit()
+sd_upload               Upload a document into a SuperDocs session
+sd_verify_key           Confirm an API key works
+sd_wait                 Wait for a job to reach a stopping point

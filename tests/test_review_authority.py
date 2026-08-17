@@ -25,7 +25,7 @@ from doctask.repositories.memory import InMemoryRepository
 from doctask.services.hashing import candidate_basis_hash
 from doctask.services.rules import parse_ruleset, source_rule_cache_key
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
 PLAYBOOK = json.loads((CORPUS / "rules.json").read_text())
 
 # Every source verdict is a violation, and PAY-01 is a blocker. The document is a clean

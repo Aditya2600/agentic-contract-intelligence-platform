@@ -22,8 +22,13 @@ from doctask.domain import (
     RunSummary,
     StageRecord,
     StoredFact,
+    WatchedCollection,
 )
-from doctask.repositories.base import CollectionConflictError, stale_proposal
+from doctask.repositories.base import (
+    CollectionConflictError,
+    ItemAlreadyDecidedError,
+    stale_proposal,
+)
 from doctask.services.hashing import register_content_hash
 from doctask.services.ids import slugify
 
@@ -32,6 +37,8 @@ class InMemoryRepository:
     def __init__(self) -> None:
         self.collections: dict[UUID, str] = {}
         self.collection_by_slug: dict[str, UUID] = {}
+        # collection_id -> the directory the watcher polls for it.
+        self.collection_watch_path: dict[UUID, str] = {}
         self.documents: dict[UUID, Document] = {}
         self.document_by_sha: dict[tuple[UUID, str], UUID] = {}
         self.supersedes: dict[UUID, UUID] = {}
@@ -52,6 +59,9 @@ class InMemoryRepository:
         self.run_collection: dict[UUID, UUID] = {}
         self.run_started: dict[UUID, datetime] = {}
         self.run_ended: dict[UUID, datetime] = {}
+        self.run_trigger: dict[UUID, str] = {}
+        self.run_trigger_document: dict[UUID, UUID] = {}
+        self.run_ruleset: dict[UUID, UUID] = {}
         # run_id -> the register rows that run's own commit actually changed.
         self.change_log: dict[UUID, list[RegisterChange]] = defaultdict(list)
         # (run_id, stage, input_hash) -> what that work produced.
@@ -78,6 +88,27 @@ class InMemoryRepository:
             self.collection_by_slug[slug] = collection_id
             return collection_id
 
+    async def set_collection_watch_path(
+        self, collection_id: UUID, watch_path: str | None
+    ) -> None:
+        if collection_id not in self.collections:
+            raise KeyError(f"collection {collection_id} does not exist")
+        if watch_path:
+            self.collection_watch_path[collection_id] = watch_path
+        else:
+            self.collection_watch_path.pop(collection_id, None)
+
+    async def list_watched_collections(self) -> list[WatchedCollection]:
+        return [
+            WatchedCollection(
+                id=collection_id, name=self.collections[collection_id], watch_path=path
+            )
+            for collection_id, path in sorted(
+                self.collection_watch_path.items(), key=lambda entry: str(entry[0])
+            )
+            if collection_id in self.collections
+        ]
+
     async def create_run(
         self, *, collection_id: UUID, run_id: UUID, idempotency_key: str, trigger: str = "api"
     ) -> tuple[UUID, bool]:
@@ -90,11 +121,27 @@ class InMemoryRepository:
             self.run_status[run_id] = "running"
             self.run_collection[run_id] = collection_id
             self.run_started[run_id] = datetime.now(UTC)
+            self.run_trigger[run_id] = trigger
             return run_id, False
+
+    async def find_run_by_idempotency_key(
+        self, collection_id: UUID, idempotency_key: str
+    ) -> UUID | None:
+        return self.runs.get((collection_id, idempotency_key))
 
     async def block_run(self, run_id: UUID, reason: str) -> None:
         self.run_status[run_id] = "blocked"
         self.run_ended[run_id] = datetime.now(UTC)
+
+    async def fail_run(self, run_id: UUID, reason: str) -> None:
+        self.run_status[run_id] = "failed"
+        self.run_ended[run_id] = datetime.now(UTC)
+
+    async def set_run_trigger_document(self, run_id: UUID, document_id: UUID) -> None:
+        self.run_trigger_document[run_id] = document_id
+
+    async def set_run_ruleset(self, run_id: UUID, ruleset_id: UUID) -> None:
+        self.run_ruleset[run_id] = ruleset_id
 
     async def put_document(self, document: Document) -> tuple[Document, bool]:
         key = (document.collection_id, document.sha256)
@@ -217,6 +264,29 @@ class InMemoryRepository:
                 )
             )
         return stored
+
+    async def get_facts_by_ids(self, fact_ids: list[UUID]) -> dict[UUID, StoredFact]:
+        wanted = set(fact_ids)
+        found: dict[UUID, StoredFact] = {}
+        for fact in self.facts_by_fingerprint.values():
+            if fact.id is None or fact.id not in wanted:
+                continue
+            document_id = self.blocks[fact.block_id].document_id
+            document = self.documents[document_id]
+            found[fact.id] = StoredFact(
+                id=fact.id,
+                key=fact.key,
+                value=fact.value,
+                fingerprint=fact.fingerprint,
+                quote=fact.quote,
+                document_id=document_id,
+                block_id=fact.block_id,
+                doc_type=document.doc_type,
+                supersedes_id=self.supersedes.get(document_id),
+                scope=fact.scope,
+                evidence=fact.evidence,
+            )
+        return found
 
     async def affected_register_keys(
         self, collection_id: UUID, scoped_keys: list[str], document_id: UUID
@@ -482,7 +552,7 @@ class InMemoryRepository:
                     if item.state == decision and item.decided_by == actor_id:
                         decided.append(item)
                         continue
-                    raise ValueError(f"review item {item_id} was already decided")
+                    raise ItemAlreadyDecidedError(f"review item {item_id} was already decided")
                 if decision not in {"approved", "rejected"}:
                     raise ValueError(f"invalid decision: {decision}")
                 item.state = decision  # type: ignore[assignment]
@@ -620,7 +690,26 @@ class InMemoryRepository:
             status=status,  # type: ignore[arg-type]
             started_at=started_at,
             ended_at=self.run_ended.get(run_id),
+            trigger=self.run_trigger.get(run_id, "api"),
+            trigger_document_id=self.run_trigger_document.get(run_id),
+            ruleset_id=self.run_ruleset.get(run_id),
         )
 
     async def list_run_changes(self, run_id: UUID) -> list[RegisterChange]:
         return list(self.change_log.get(run_id, []))
+
+    async def list_runs(
+        self, collection_id: UUID, *, status: str | None = None
+    ) -> list[RunSummary]:
+        run_ids = [
+            run_id
+            for (cid, _key), run_id in self.runs.items()
+            if cid == collection_id
+            and (status is None or self.run_status.get(run_id) == status)
+        ]
+        summaries = [await self.get_run(run_id) for run_id in run_ids]
+        return sorted(
+            (summary for summary in summaries if summary is not None),
+            key=lambda summary: summary.started_at,
+            reverse=True,
+        )

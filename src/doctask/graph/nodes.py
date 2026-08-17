@@ -29,6 +29,7 @@ from doctask.graph.state import GraphState
 from doctask.llm.base import ModelGateway, RuleExcerpt
 from doctask.repositories.base import Repository
 from doctask.services.citations import validate_citation
+from doctask.services.cost_report import build_run_cost_report
 from doctask.services.derivation import Derivation, derive_key
 from doctask.services.grounding import check_qualifiers, check_value, span_for
 from doctask.services.hashing import (
@@ -96,6 +97,9 @@ async def _event(
     usage: dict[str, int] | None = None,
     input_hash: str | None = None,
     output_hash: str | None = None,
+    model: str | None = None,
+    cache_hit: bool = False,
+    external_service: str | None = None,
 ) -> None:
     """Record what happened, and -- for a stage that wrote something -- that it happened.
 
@@ -124,13 +128,28 @@ async def _event(
             duration_ms=int((perf_counter() - started) * 1000),
             tokens_in=usage.get("tokens_in", 0),
             tokens_out=usage.get("tokens_out", 0),
+            model=model,
+            cache_hit=cache_hit,
+            external_service=external_service,
         )
     )
 
 
 def _model_usage(deps: NodeDependencies) -> dict[str, int]:
-    """Token counts from the last model call; the offline fake reports zero."""
+    """Token counts from the last model call; FakeLLM reports its own approximation."""
     return getattr(deps.model, "last_usage", {}) or {}
+
+
+def _model_name(deps: NodeDependencies) -> str:
+    """Which model answered, for the cost report's pricing lookup and model breakdown.
+
+    `.model` is the identifier a price table is keyed on (the real model id for the
+    gateway, `"fake"` for the offline stand-in). `extractor_version` is a fallback for
+    any future `ModelGateway` implementation that names itself differently.
+    """
+    return getattr(deps.model, "model", None) or getattr(
+        deps.model, "extractor_version", "unknown"
+    )
 
 
 def _candidate_to_dict(candidate: FactCandidate) -> dict[str, Any]:
@@ -756,6 +775,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
             next_node=next_node,
             started=started,
             usage=_model_usage(deps),
+            model=_model_name(deps),
         )
         return Command(
             update={"document_type": doc_type, "document_type_confidence": confidence},
@@ -1068,6 +1088,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
             next_node="validate_citations",
             started=started,
             usage={"tokens_in": tokens_in, "tokens_out": tokens_out},
+            model=_model_name(deps),
         )
         return Command(
             update={"fact_candidates": [_candidate_to_dict(c) for c in candidates]},
@@ -1423,6 +1444,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
                     started=started,
                     error_class="transient",
                     usage={"tokens_in": tokens_in, "tokens_out": tokens_out},
+                    model=_model_name(deps),
                 )
                 raise
             usage = _model_usage(deps)
@@ -1465,6 +1487,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
             started=started,
             error_class="policy" if counts["violation"] else None,
             usage={"tokens_in": tokens_in, "tokens_out": tokens_out},
+            model=_model_name(deps),
             input_hash=stage_input_hash(
                 stage,
                 state.get("ruleset_hash"),
@@ -1547,6 +1570,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
                 ),
                 next_node=next_node,
                 started=started,
+                cache_hit=True,
             )
             return Command(
                 update={
@@ -2539,6 +2563,7 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
         collection_id = UUID(state["collection_id"])
         register = await deps.repository.list_register(collection_id)
         events = await deps.repository.list_events(UUID(state["run_id"]))
+        stage_ledger = await deps.repository.list_stages(UUID(state["run_id"]))
         open_conflicts = await deps.repository.list_conflicts(collection_id, state="open")
         register_before = state.get("register_before", {})
         hashes_after = {item.register_key.text: item.content_hash for item in register}
@@ -2639,6 +2664,10 @@ def make_nodes(deps: NodeDependencies) -> dict[str, Any]:
             "register_hashes": hashes_after,
             "events": len(events) + 1,
             "injection_flag": state.get("injection_flag", False),
+            # This node's own event, recorded below, is not in `events` yet -- everything
+            # up to and including derivation, review and commit is, which is what a
+            # cost report about "what this run cost" needs.
+            "cost": build_run_cost_report(events, stage_ledger),
         }
         await _event(
             deps,

@@ -19,7 +19,7 @@ from doctask.repositories.memory import InMemoryRepository
 from doctask.services.hashing import sha256_text
 from doctask.services.rules import ground_verdict, parse_ruleset, rules_for, ruleset_hash
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
 PLAYBOOK = json.loads((CORPUS / "rules.json").read_text())
 
 

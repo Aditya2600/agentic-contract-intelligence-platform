@@ -22,7 +22,7 @@ from doctask.repositories.memory import InMemoryRepository
 from doctask.services.relations import agreement_ref, detect_relations, self_declared_ref
 from doctask.services.scoping import obligation_scope_for, parties_in, scope_for
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
 
 ALPHA = "msa_alpha.txt"
 BETA = "msa_beta.txt"

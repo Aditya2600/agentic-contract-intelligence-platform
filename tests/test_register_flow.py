@@ -17,7 +17,7 @@ from doctask.graph.nodes import NodeDependencies
 from doctask.llm.fake import FakeLLM
 from doctask.repositories.memory import InMemoryRepository
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
 
 # This corpus is one unnamed agreement, so every register row lives in the "" bucket and
 # the obligation key alone still identifies it. The scoped form is what the graph passes

@@ -1,0 +1,14 @@
+-- The ruleset a run was actually judged against, recorded once and never moved.
+--
+-- `pin_ruleset` already resolves the collection's active ruleset once, at run start,
+-- and pins its id into the graph state so both rule stages read the same playbook even
+-- if an edit lands mid-run. Nothing durable recorded that choice past the run's own
+-- checkpoint, though: a caller asking "what ruleset did run X commit against" after the
+-- collection moved on to a newer version got today's active ruleset instead -- the
+-- wrong answer dressed as the right one, since both are non-null and look equally
+-- authoritative.
+--
+-- Nullable: a run committed before this column existed has no way to recover the
+-- answer retroactively, and a run over a collection with no playbook pins nothing.
+-- Both are honestly reported as unknown rather than guessed.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS ruleset_id UUID REFERENCES rulesets(id);

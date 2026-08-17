@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import re
 from dataclasses import dataclass, field
+from time import perf_counter
 from typing import Protocol
 
 # Minimum alphanumeric characters before a page counts as read at all.
@@ -73,6 +74,11 @@ class ExtractedDocument:
     text: str
     blocks: list[ExtractedBlock]
     warnings: list[str] = field(default_factory=list)
+    # One entry per page a vision model transcribed: what it cost, in the pipeline's own
+    # units. Extraction runs before a run_id exists to attach a `RunEvent` to, so this is
+    # how that cost survives to reach one -- `ingest_file` replays these into the run's
+    # event log once the run it belongs to has been created.
+    ocr_calls: list[dict] = field(default_factory=list)
 
     @property
     def methods(self) -> set[str]:
@@ -217,7 +223,7 @@ def _open_pdf(data: bytes):
 
 
 async def _extract_pdf(
-    data: bytes, ocr: PageOCR | None, warnings: list[str]
+    data: bytes, ocr: PageOCR | None, warnings: list[str], ocr_calls: list[dict]
 ) -> list[ExtractedBlock]:
     try:
         import pymupdf  # noqa: F401
@@ -253,7 +259,9 @@ async def _extract_pdf(
             problem = _needs_ocr(text, image_coverage=coverage, has_table=bool(tables))
             method = NATIVE_PDF
             if problem is not None:
-                text = await _ocr_page(page, number=number, ocr=ocr, problem=problem)
+                text = await _ocr_page(
+                    page, number=number, ocr=ocr, problem=problem, ocr_calls=ocr_calls
+                )
                 method = GEMMA_VLM
                 warnings.append(f"page {number} was read by a vision model, not from the file")
             elif rotation:
@@ -268,15 +276,28 @@ async def _extract_pdf(
     return blocks
 
 
-async def _ocr_page(page, *, number: int, ocr: PageOCR | None, problem: str) -> str:
+async def _ocr_page(
+    page, *, number: int, ocr: PageOCR | None, problem: str, ocr_calls: list[dict]
+) -> str:
     """Read a page the native extractor could not. Failing here fails the document."""
     if ocr is None:
         raise ExtractionError(f"page {number}: {problem}, and no OCR model is configured")
     image = page.get_pixmap(dpi=_OCR_DPI).tobytes("png")
+    started = perf_counter()
     try:
         text = await ocr.read_page(image, page=number)
     except Exception as exc:
         raise ExtractionError(f"page {number}: {problem}, and OCR failed: {exc}") from exc
+    usage = getattr(ocr, "last_usage", {}) or {}
+    ocr_calls.append(
+        {
+            "page": number,
+            "model": getattr(ocr, "vision_model", None) or getattr(ocr, "model", "unknown"),
+            "tokens_in": usage.get("tokens_in", 0),
+            "tokens_out": usage.get("tokens_out", 0),
+            "duration_ms": int((perf_counter() - started) * 1000),
+        }
+    )
     if _alnum(text) < _MIN_ALNUM or _is_garbled(text):
         raise ExtractionError(f"page {number}: {problem}, and OCR returned nothing legible")
     return text
@@ -356,14 +377,18 @@ async def extract_document(
         raise ExtractionError("uploaded file is empty")
     kind = _kind(filename, mime_type)
     warnings: list[str] = []
+    ocr_calls: list[dict] = []
     if kind == "pdf":
-        blocks = await _extract_pdf(data, ocr, warnings)
+        blocks = await _extract_pdf(data, ocr, warnings, ocr_calls)
     elif kind == "docx":
         blocks = _extract_docx(data, warnings)
     else:
         blocks = _extract_txt(data)
     return ExtractedDocument(
-        text="\n\n".join(block.text for block in blocks), blocks=blocks, warnings=warnings
+        text="\n\n".join(block.text for block in blocks),
+        blocks=blocks,
+        warnings=warnings,
+        ocr_calls=ocr_calls,
     )
 
 

@@ -29,7 +29,7 @@ async def main() -> None:
         print("models:", [entry["id"] for entry in response.json().get("data", [])])
 
     model = build_model()
-    text = Path("sample_data/vendor_msa.txt").read_text()
+    text = Path("data/sample_data/vendor_msa.txt").read_text()
     print("classify:", await model.classify(text))
 
     paragraph = next(p.strip() for p in text.split("\n\n") if "Payment" in p)

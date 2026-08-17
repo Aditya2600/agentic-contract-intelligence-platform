@@ -32,7 +32,7 @@ from doctask.services.grounding import (
 from doctask.services.hashing import register_content_hash, sha256_text
 from doctask.services.rules import parse_ruleset
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
 PLAYBOOK = json.loads((CORPUS / "rules.json").read_text())
 
 

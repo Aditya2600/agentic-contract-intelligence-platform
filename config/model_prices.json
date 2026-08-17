@@ -1,0 +1,27 @@
+{
+  "version": "2026-08-16",
+  "_comment": "USD per million tokens. Reviewer-maintained; the cost report reads this file and states which version produced its numbers. A model called but absent from this table is reported as unpriced, with its token counts intact -- never priced at zero.",
+  "prices": {
+    "fake": {
+      "input_per_million_usd": 0.0,
+      "output_per_million_usd": 0.0,
+      "note": "the offline FakeLLM stand-in; genuinely free, not merely unpriced"
+    },
+    "gpt-4o": {
+      "input_per_million_usd": 2.50,
+      "output_per_million_usd": 10.00
+    },
+    "gpt-4o-mini": {
+      "input_per_million_usd": 0.15,
+      "output_per_million_usd": 0.60
+    },
+    "llama-3.1-70b-instruct": {
+      "input_per_million_usd": 0.35,
+      "output_per_million_usd": 0.40
+    },
+    "qwen2.5-72b-instruct": {
+      "input_per_million_usd": 0.35,
+      "output_per_million_usd": 0.40
+    }
+  }
+}

@@ -439,6 +439,13 @@ class RunEvent:
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
+    # The three fields the cost/latency report reads that nothing used to write: which
+    # model answered this event (for pricing and for telling a real call apart from an
+    # offline one), whether it was served from a cache instead of computed, and which
+    # external service (currently only "ocr") it called, if any.
+    model: str | None = None
+    cache_hit: bool = False
+    external_service: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -547,6 +554,30 @@ class RunSummary:
     status: RunStatus
     started_at: datetime
     ended_at: datetime | None = None
+    # What put this run here -- api, mcp, watcher -- and the document it was started
+    # over. `trigger_document_id` is None until the run's ingest stage has stored the
+    # document, and stays None for a run that never got that far.
+    trigger: str = "api"
+    trigger_document_id: UUID | None = None
+    # The ruleset this run was actually pinned to at `pin_ruleset`, once the graph has
+    # reported it back -- not the collection's currently active ruleset, which may have
+    # moved on since. None means either no playbook was pinned, or this run predates the
+    # column; both report as unknown rather than guessing the active one.
+    ruleset_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WatchedCollection:
+    """A collection that has named a directory for documents to arrive in.
+
+    `watch_path` is a property of the collection, not of the watcher process: which
+    directories get polled is a question the database answers, so a watcher restart,
+    a second replica and a fresh container all poll the same set without being told.
+    """
+
+    id: UUID
+    name: str
+    watch_path: str
 
 
 @dataclass(slots=True)

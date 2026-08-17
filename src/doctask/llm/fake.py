@@ -92,20 +92,39 @@ def _sentences(text: str) -> list[str]:
     return [sentence.strip() for sentence in _SENTENCE_BREAK.split(unwrapped) if sentence.strip()]
 
 
+def _approx_tokens(text: str) -> int:
+    """A real, deterministic token count for text nobody billed for.
+
+    Not a tokenizer -- an offline stand-in has no vocabulary to tokenize against -- but
+    it is a genuine function of what was actually read or written, at the ~4-characters-
+    per-token rate real BPE tokenizers land near for English prose. That is the
+    difference the cost report needs: a number that moves when the text does, not a
+    constant that would make every event look identical regardless of what happened.
+    """
+    return max(1, len(text) // 4)
+
+
 class FakeLLM:
     """Deterministic offline model used by tests and the local demo."""
 
     extractor_version = "fake-v1"
+    # The price table's key for "no real model was called". Declared there at
+    # $0/million tokens -- an explicit zero, not the silent one an unrecognised model
+    # would get.
+    model = "fake"
 
     def __init__(self, ocr_pages: dict[int, str] | None = None) -> None:
         # What the stand-in "vision model" sees on each rendered page, by page number.
         # Empty by default: offline, an unreadable page stays unreadable, which is the
         # behaviour the failure tests need.
         self.ocr_pages = ocr_pages or {}
+        self.last_usage: dict[str, int] = {"tokens_in": 0, "tokens_out": 0}
 
     async def read_page(self, image_png: bytes, *, page: int) -> str:
         del image_png
-        return self.ocr_pages.get(page, "")
+        text = self.ocr_pages.get(page, "")
+        self.last_usage = {"tokens_in": _approx_tokens(str(page)), "tokens_out": _approx_tokens(text)}
+        return text
 
     async def classify(self, text: str) -> tuple[DocType, float, str]:
         """Type a document from what it calls itself, not from what it mentions.
@@ -130,12 +149,25 @@ class FakeLLM:
         # Earliest line wins, then marker order. A document's own title comes before the
         # documents it refers to, and the one line that carries both -- "AMENDMENT NO. 1
         # TO MASTER SERVICES AGREEMENT" -- is settled by the order above.
+        result: tuple[DocType, float, str] = (
+            "unknown",
+            0.45,
+            "no type marker in the document title block",
+        )
         for line in text.splitlines()[:_TITLE_LINES]:
             lowered = line.lower()
             for doc_type, words, confidence, reason in markers:
                 if any(word in lowered for word in words):
-                    return doc_type, confidence, reason
-        return "unknown", 0.45, "no type marker in the document title block"
+                    result = (doc_type, confidence, reason)
+                    break
+            else:
+                continue
+            break
+        self.last_usage = {
+            "tokens_in": _approx_tokens(text),
+            "tokens_out": _approx_tokens(result[2]),
+        }
+        return result
 
     async def extract(self, block: Block, *, wider_context: bool = False) -> list[FactCandidate]:
         del wider_context
@@ -218,9 +250,31 @@ class FakeLLM:
                         quote_end=end,
                     )
                 )
+        self.last_usage = {
+            "tokens_in": _approx_tokens(block.text),
+            "tokens_out": sum(_approx_tokens(c.quote) for c in candidates) or 1,
+        }
         return candidates
 
     async def evaluate_rule(
+        self,
+        rule: Rule,
+        *,
+        target_label: str,
+        excerpts: list[RuleExcerpt],
+        statement: str | None = None,
+    ) -> RuleVerdict:
+        verdict = await self._evaluate_rule(
+            rule, target_label=target_label, excerpts=excerpts, statement=statement
+        )
+        prompt_text = rule.text + (statement or "") + "".join(e.text for e in excerpts)
+        self.last_usage = {
+            "tokens_in": _approx_tokens(prompt_text),
+            "tokens_out": _approx_tokens(verdict.rationale),
+        }
+        return verdict
+
+    async def _evaluate_rule(
         self,
         rule: Rule,
         *,

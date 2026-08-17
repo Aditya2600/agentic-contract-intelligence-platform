@@ -30,8 +30,13 @@ from doctask.domain import (
     RunSummary,
     StageRecord,
     StoredFact,
+    WatchedCollection,
 )
-from doctask.repositories.base import CollectionConflictError, stale_proposal
+from doctask.repositories.base import (
+    CollectionConflictError,
+    ItemAlreadyDecidedError,
+    stale_proposal,
+)
 from doctask.services.hashing import register_content_hash
 from doctask.services.ids import slugify
 
@@ -92,6 +97,32 @@ class PostgresRepository:
                 )
             return existing["id"]
 
+    async def set_collection_watch_path(
+        self, collection_id: UUID, watch_path: str | None
+    ) -> None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "UPDATE collections SET watch_path = %s WHERE id = %s RETURNING id",
+                (watch_path or None, collection_id),
+            )
+            if await cur.fetchone() is None:
+                raise KeyError(f"collection {collection_id} does not exist")
+
+    async def list_watched_collections(self) -> list[WatchedCollection]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT id, name, watch_path FROM collections
+                 WHERE watch_path IS NOT NULL AND watch_path <> ''
+                 ORDER BY slug
+                """
+            )
+            rows = await cur.fetchall()
+        return [
+            WatchedCollection(id=row["id"], name=row["name"], watch_path=row["watch_path"])
+            for row in rows
+        ]
+
     # ------------------------------------------------------------------ runs
 
     async def create_run(
@@ -124,6 +155,17 @@ class PostgresRepository:
             assert existing is not None
             return existing["id"], True
 
+    async def find_run_by_idempotency_key(
+        self, collection_id: UUID, idempotency_key: str
+    ) -> UUID | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT id FROM runs WHERE collection_id = %s AND idempotency_key = %s",
+                (collection_id, idempotency_key),
+            )
+            row = await cur.fetchone()
+        return row["id"] if row is not None else None
+
     async def block_run(self, run_id: UUID, reason: str) -> None:
         """Park the run as blocked. Nothing was committed, so the register is untouched;
         this is what makes blocked runs findable instead of looking merely unfinished."""
@@ -131,6 +173,30 @@ class PostgresRepository:
             await conn.execute(
                 "UPDATE runs SET status = 'blocked', ended_at = now() WHERE id = %s",
                 (run_id,),
+            )
+
+    async def fail_run(self, run_id: UUID, reason: str) -> None:
+        """Park the run as failed. Its input never became a document, so there is nothing
+        to resume; the row stands as the record that this input was tried and could not
+        be read."""
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "UPDATE runs SET status = 'failed', ended_at = now() WHERE id = %s",
+                (run_id,),
+            )
+
+    async def set_run_trigger_document(self, run_id: UUID, document_id: UUID) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "UPDATE runs SET trigger_doc_id = %s WHERE id = %s",
+                (document_id, run_id),
+            )
+
+    async def set_run_ruleset(self, run_id: UUID, ruleset_id: UUID) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "UPDATE runs SET ruleset_id = %s WHERE id = %s",
+                (ruleset_id, run_id),
             )
 
     # ------------------------------------------------------------------ documents
@@ -493,6 +559,38 @@ class PostgresRepository:
             )
             for row in rows
         ]
+
+    async def get_facts_by_ids(self, fact_ids: list[UUID]) -> dict[UUID, StoredFact]:
+        if not fact_ids:
+            return {}
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT f.id, f.key, f.value, f.fact_fingerprint, f.quote, f.scope,
+                       f.evidence, f.document_id, f.block_id, d.doc_type, d.supersedes_id
+                  FROM facts f
+                  JOIN documents d ON d.id = f.document_id
+                 WHERE f.id = ANY(%s)
+                """,
+                (list(fact_ids),),
+            )
+            rows = await cur.fetchall()
+        return {
+            row["id"]: StoredFact(
+                id=row["id"],
+                key=row["key"],
+                value=row["value"],
+                fingerprint=row["fact_fingerprint"],
+                quote=row["quote"],
+                document_id=row["document_id"],
+                block_id=row["block_id"],
+                doc_type=row["doc_type"],
+                supersedes_id=row["supersedes_id"],
+                scope=FactScope.from_dict(row["scope"]),
+                evidence=EvidenceSpan.from_dict(row["evidence"]),
+            )
+            for row in rows
+        }
 
     async def affected_register_keys(
         self, collection_id: UUID, scoped_keys: list[str], document_id: UUID
@@ -1060,9 +1158,10 @@ class PostgresRepository:
                 """
                 INSERT INTO run_events
                     (run_id, seq, stage, decision, reason, next_node, error_class,
-                     tokens_in, tokens_out, cost_usd, started_at, ended_at, duration_ms)
+                     tokens_in, tokens_out, cost_usd, model, cache_hit, external_svc,
+                     started_at, ended_at, duration_ms)
                 SELECT %s, COALESCE(MAX(seq), 0) + 1, %s, %s, %s, %s, %s,
-                       %s, %s, %s, %s, %s, %s
+                       %s, %s, %s, %s, %s, %s, %s, %s, %s
                   FROM run_events WHERE run_id = %s
                 """,
                 (
@@ -1075,6 +1174,9 @@ class PostgresRepository:
                     event.tokens_in,
                     event.tokens_out,
                     event.cost_usd,
+                    event.model,
+                    event.cache_hit,
+                    event.external_service,
                     started_at,
                     event.created_at,
                     event.duration_ms,
@@ -1087,7 +1189,8 @@ class PostgresRepository:
             cur = await conn.execute(
                 """
                 SELECT run_id, stage, decision, reason, next_node, error_class,
-                       tokens_in, tokens_out, cost_usd, ended_at, duration_ms
+                       tokens_in, tokens_out, cost_usd, model, cache_hit, external_svc,
+                       ended_at, duration_ms
                   FROM run_events WHERE run_id = %s ORDER BY seq
                 """,
                 (run_id,),
@@ -1101,6 +1204,9 @@ class PostgresRepository:
                 reason=row["reason"] or "",
                 next_node=row["next_node"] or "",
                 error_class=row["error_class"],
+                model=row["model"],
+                cache_hit=row["cache_hit"],
+                external_service=row["external_svc"],
                 duration_ms=row["duration_ms"] or 0,
                 tokens_in=row["tokens_in"],
                 tokens_out=row["tokens_out"],
@@ -1205,7 +1311,7 @@ class PostgresRepository:
                     if owner["state"] == decision and owner["decided_by"] == actor_id:
                         decided.append(as_item(owner))
                         continue
-                    raise ValueError(f"review item {item_id} was already decided")
+                    raise ItemAlreadyDecidedError(f"review item {item_id} was already decided")
                 try:
                     cur = await conn.execute(
                         "SELECT * FROM decide_review_item(%s, %s, %s, NULL)",
@@ -1214,7 +1320,9 @@ class PostgresRepository:
                     row = await cur.fetchone()
                 except errors.RaiseException as exc:
                     # The compare-and-set lost: another actor decided this row first.
-                    raise ValueError(f"review item {item_id} was already decided") from exc
+                    raise ItemAlreadyDecidedError(
+                        f"review item {item_id} was already decided"
+                    ) from exc
                 assert row is not None
                 decided.append(as_item(row))
         return decided
@@ -1537,7 +1645,11 @@ class PostgresRepository:
     async def get_run(self, run_id: UUID) -> RunSummary | None:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
-                "SELECT id, collection_id, status, started_at, ended_at FROM runs WHERE id = %s",
+                """
+                SELECT id, collection_id, status, started_at, ended_at,
+                       "trigger", trigger_doc_id, ruleset_id
+                  FROM runs WHERE id = %s
+                """,
                 (run_id,),
             )
             row = await cur.fetchone()
@@ -1549,6 +1661,9 @@ class PostgresRepository:
             status=row["status"],
             started_at=row["started_at"],
             ended_at=row["ended_at"],
+            trigger=row["trigger"],
+            trigger_document_id=row["trigger_doc_id"],
+            ruleset_id=row["ruleset_id"],
         )
 
     async def list_run_changes(self, run_id: UUID) -> list[RegisterChange]:
@@ -1575,6 +1690,35 @@ class PostgresRepository:
                 old_hash=row["old_hash"],
                 new_hash=row["new_hash"],
                 changed_at=row["changed_at"],
+            )
+            for row in rows
+        ]
+
+    async def list_runs(
+        self, collection_id: UUID, *, status: str | None = None
+    ) -> list[RunSummary]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT id, collection_id, status, started_at, ended_at,
+                       "trigger", trigger_doc_id, ruleset_id
+                  FROM runs
+                 WHERE collection_id = %s AND (%s::text IS NULL OR status = %s)
+                 ORDER BY started_at DESC
+                """,
+                (collection_id, status, status),
+            )
+            rows = await cur.fetchall()
+        return [
+            RunSummary(
+                run_id=row["id"],
+                collection_id=row["collection_id"],
+                status=row["status"],
+                started_at=row["started_at"],
+                ended_at=row["ended_at"],
+                trigger=row["trigger"],
+                trigger_document_id=row["trigger_doc_id"],
+                ruleset_id=row["ruleset_id"],
             )
             for row in rows
         ]

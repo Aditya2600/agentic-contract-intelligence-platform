@@ -15,5 +15,60 @@ services:
     volumes:
       - doctask_pg:/var/lib/postgresql/data
 
+  # Applies migrations once and exits. `api` and `watcher` both wait on it rather than
+  # racing each other to migrate the same database on first boot.
+  migrate:
+    build: .
+    command: ["python", "scripts/apply_migrations.py"]
+    environment:
+      DOCTASK_DATABASE_URL: postgresql://doctask:doctask@postgres:5432/doctask
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    command:
+      ["uvicorn", "doctask.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DOCTASK_REPOSITORY: postgres
+      DOCTASK_DATABASE_URL: postgresql://doctask:doctask@postgres:5432/doctask
+    # A collection's `watch_path` (set via the API) has to name a directory this
+    # container can also see under the same path -- otherwise a document created
+    # through the API for a watched collection could reference a location `watcher`
+    # can't read. Both services mount the same host directory at the same path.
+    volumes:
+      - ./watched:/data/watch
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # The collection watcher: requirement C, running alongside the API rather than as
+  # a manual step. `docker compose up` starts it with everything else; `docker compose
+  # up api` (without `watcher`) runs the system with nothing polling for dropped files,
+  # which is a legitimate way to run this too.
+  watcher:
+    build: .
+    command: ["python", "-m", "doctask.watcher"]
+    env_file:
+      - .env
+    environment:
+      DOCTASK_REPOSITORY: postgres
+      DOCTASK_DATABASE_URL: postgresql://doctask:doctask@postgres:5432/doctask
+    volumes:
+      - ./watched:/data/watch
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   doctask_pg:

@@ -36,7 +36,11 @@ dev = [
 packages = ["src/doctask"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# "src" so `import doctask` works from a source checkout; "." so the few tests that
+# share a fixture corpus can `from tests.robustness_corpus import ...`. Without the
+# second entry a clean clone needs `PYTHONPATH=. pytest`, and plain `pytest` -- which is
+# what the README tells a reviewer to run -- fails at collection.
+pythonpath = ["src", "."]
 addopts = "-q"
 asyncio_mode = "auto"
 

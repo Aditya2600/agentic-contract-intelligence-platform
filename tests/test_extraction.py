@@ -32,7 +32,7 @@ from doctask.services.extraction import (
     extract_document,
 )
 
-PACK = Path(__file__).resolve().parents[1] / "realistic_synthetic_demo_pack"
+PACK = Path(__file__).resolve().parents[1] / "data" / "demo_pack"
 
 MSA = PACK / "01_Master_Services_Agreement_MSA-2026-014.pdf"
 AMENDMENT = PACK / "02_Amendment_No_1_AMD-2026-014-01.pdf"

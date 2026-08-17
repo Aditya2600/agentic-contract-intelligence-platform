@@ -30,8 +30,10 @@ from pg_app import DATABASE_URL, facts, query, requires_postgres, restart, stage
 
 pytestmark = requires_postgres
 
-CORPUS = Path(__file__).resolve().parent.parent / "sample_data"
-WORKER = Path(__file__).resolve().parent / "crash_worker.py"
+CORPUS = Path(__file__).resolve().parent.parent / "data" / "sample_data"
+# The same worker `scripts/crash_demo.py` drives. One kill mechanism, used by both the
+# integration test and the reviewer-facing demo, so the demo cannot drift from the proof.
+WORKER = Path(__file__).resolve().parent.parent / "scripts" / "crash_worker.py"
 
 
 async def _crash(tmp_path: Path, name: str, spec: dict) -> None:

@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Editing a research paper with a review gate</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Editing a research paper with a review
+gate</h1>
+
+
+
+<div id="the-problem-this-solves" class="section level2">
+<h2>The problem this solves</h2>
+<p>An AI that edits your manuscript is useful right up to the moment it
+changes something you did not want changed. In a paper, that is not a
+cosmetic problem: a rewritten hedge becomes an overclaim, a “tightened”
+result becomes a different result, and neither is obvious three drafts
+later.</p>
+<p>So this package does not apply edits. It proposes them, shows you
+what they are, and applies exactly the ones you name. The workflow is
+five calls:</p>
+<pre><code>sd_upload()  -&gt;  sd_edit()  -&gt;  sd_wait()  -&gt;  sd_changes()  -&gt;  sd_approve()  -&gt;  sd_export()</code></pre>
+<p>and the gate sits in the middle of it, not as an option you can
+switch on.</p>
+</div>
+<div id="running-this-vignette" class="section level2">
+<h2>Running this vignette</h2>
+<p>Everything below actually runs, with no API key and no network. The
+client’s HTTP transport is a plain function, so this vignette supplies
+one that returns recorded SuperDocs payloads. That is the same seam the
+package’s test suite uses, and it is available to you: if you are
+building on top of <code>superdocsr</code>, you can test your own code
+the same way.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Recorded payloads, shaped exactly like the documented API responses.</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>payloads <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="at">upload =</span> <span class="fu">list</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>    <span class="at">html =</span> <span class="st">&quot;&lt;div data-chunk-id=</span><span class="sc">\&quot;</span><span class="st">c1</span><span class="sc">\&quot;</span><span class="st">&gt;&lt;h1&gt;Effects of X on Y&lt;/h1&gt;&lt;/div&gt;&quot;</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>    <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>, <span class="at">filename =</span> <span class="st">&quot;manuscript.docx&quot;</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>    <span class="at">chunks_count =</span> <span class="dv">96</span>, <span class="at">version_id =</span> <span class="st">&quot;v_1&quot;</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>    <span class="at">page_setup =</span> <span class="fu">list</span>(<span class="at">width_in =</span> <span class="fl">8.27</span>, <span class="at">height_in =</span> <span class="fl">11.69</span>, <span class="at">orientation =</span> <span class="st">&quot;portrait&quot;</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  ),</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="at">started =</span> <span class="fu">list</span>(<span class="at">job_id =</span> <span class="st">&quot;job_7f3a&quot;</span>, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>, <span class="at">status =</span> <span class="st">&quot;pending&quot;</span>),</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  <span class="at">review =</span> <span class="fu">list</span>(</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="at">job_id =</span> <span class="st">&quot;job_7f3a&quot;</span>, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>, <span class="at">job_type =</span> <span class="st">&quot;chat&quot;</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>    <span class="at">status =</span> <span class="st">&quot;awaiting_approval&quot;</span>, <span class="at">progress =</span> <span class="dv">60</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>    <span class="at">created_at =</span> <span class="st">&quot;2026-08-10T10:00:00Z&quot;</span>, <span class="at">updated_at =</span> <span class="st">&quot;2026-08-10T10:01:12Z&quot;</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>    <span class="at">metadata =</span> <span class="fu">list</span>(<span class="at">intermediate_responses =</span> <span class="fu">list</span>(</span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>      <span class="fu">list</span>(<span class="at">type =</span> <span class="st">&quot;intermediate&quot;</span>, <span class="at">content =</span> <span class="st">&quot;Reading the discussion...&quot;</span>, <span class="at">sequence =</span> <span class="dv">1</span>),</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>      <span class="co"># Note the shape: `content` is a JSON string inside JSON.</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>      <span class="fu">list</span>(<span class="at">type =</span> <span class="st">&quot;proposed_change_batch&quot;</span>, <span class="at">sequence =</span> <span class="dv">2</span>, <span class="at">content =</span> jsonlite<span class="sc">::</span><span class="fu">toJSON</span>(<span class="fu">list</span>(</span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>        <span class="at">type =</span> <span class="st">&quot;batch_approval&quot;</span>, <span class="at">batch_id =</span> <span class="st">&quot;ch_1&quot;</span>, <span class="at">batch_total =</span> <span class="dv">2</span>,</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>        <span class="at">changes =</span> <span class="fu">list</span>(</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>          <span class="fu">list</span>(</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>            <span class="at">change_id =</span> <span class="st">&quot;ch_1&quot;</span>, <span class="at">operation =</span> <span class="st">&quot;edit&quot;</span>, <span class="at">chunk_id =</span> <span class="st">&quot;c41&quot;</span>,</span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>            <span class="at">old_html =</span> <span class="st">&quot;&lt;p&gt;The effect was very significant.&lt;/p&gt;&quot;</span>,</span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>            <span class="at">new_html =</span> <span class="st">&quot;&lt;p&gt;The effect was significant (p = 0.03).&lt;/p&gt;&quot;</span>,</span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a>            <span class="at">ai_explanation =</span> <span class="st">&quot;Replaced an intensifier with the reported statistic&quot;</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a>          ),</span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a>          <span class="fu">list</span>(</span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>            <span class="at">change_id =</span> <span class="st">&quot;ch_2&quot;</span>, <span class="at">operation =</span> <span class="st">&quot;delete&quot;</span>, <span class="at">chunk_id =</span> <span class="st">&quot;c58&quot;</span>,</span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>            <span class="at">old_html =</span> <span class="st">&quot;&lt;p&gt;This clearly proves the mechanism.&lt;/p&gt;&quot;</span>,</span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>            <span class="at">new_html =</span> <span class="cn">NULL</span>,</span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>            <span class="at">ai_explanation =</span> <span class="st">&quot;Removed a causal claim the data does not support&quot;</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a>          )</span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a>        )</span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>      ), <span class="at">auto_unbox =</span> <span class="cn">TRUE</span>, <span class="at">null =</span> <span class="st">&quot;null&quot;</span>))</span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>    ))</span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>  ),</span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a>  <span class="at">done =</span> <span class="fu">list</span>(</span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a>    <span class="at">job_id =</span> <span class="st">&quot;job_7f3a&quot;</span>, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>, <span class="at">job_type =</span> <span class="st">&quot;chat&quot;</span>,</span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a>    <span class="at">status =</span> <span class="st">&quot;completed&quot;</span>, <span class="at">progress =</span> <span class="dv">100</span>,</span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a>    <span class="at">created_at =</span> <span class="st">&quot;2026-08-10T10:00:00Z&quot;</span>, <span class="at">updated_at =</span> <span class="st">&quot;2026-08-10T10:02:40Z&quot;</span>,</span>
+<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a>    <span class="at">result =</span> <span class="fu">list</span>(<span class="at">response =</span> <span class="st">&quot;Applied 1 change.&quot;</span>, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>)</span>
+<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>  )</span>
+<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>)</span>
+<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a></span>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>json <span class="ot">&lt;-</span> <span class="cf">function</span>(x) {</span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a>  httr2<span class="sc">::</span><span class="fu">response</span>(</span>
+<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a>    <span class="at">status_code =</span> <span class="dv">200</span>, <span class="at">headers =</span> <span class="fu">list</span>(<span class="st">`</span><span class="at">Content-Type</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;application/json&quot;</span>),</span>
+<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a>    <span class="at">body =</span> <span class="fu">charToRaw</span>(jsonlite<span class="sc">::</span><span class="fu">toJSON</span>(x, <span class="at">auto_unbox =</span> <span class="cn">TRUE</span>, <span class="at">null =</span> <span class="st">&quot;null&quot;</span>))</span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a>  )</span>
+<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a>}</span>
+<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a></span>
+<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a>approved_yet <span class="ot">&lt;-</span> <span class="cn">FALSE</span></span>
+<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a>transport <span class="ot">&lt;-</span> <span class="cf">function</span>(req) {</span>
+<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a>  path <span class="ot">&lt;-</span> httr2<span class="sc">::</span><span class="fu">url_parse</span>(req<span class="sc">$</span>url)<span class="sc">$</span>path</span>
+<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">grepl</span>(<span class="st">&quot;documents/upload&quot;</span>, path)) <span class="fu">return</span>(<span class="fu">json</span>(payloads<span class="sc">$</span>upload))</span>
+<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">grepl</span>(<span class="st">&quot;chat/async&quot;</span>, path)) <span class="fu">return</span>(<span class="fu">json</span>(payloads<span class="sc">$</span>started))</span>
+<span id="cb2-56"><a href="#cb2-56" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">grepl</span>(<span class="st">&quot;approve&quot;</span>, path)) {</span>
+<span id="cb2-57"><a href="#cb2-57" tabindex="-1"></a>    approved_yet <span class="ot">&lt;&lt;-</span> <span class="cn">TRUE</span></span>
+<span id="cb2-58"><a href="#cb2-58" tabindex="-1"></a>    <span class="fu">return</span>(<span class="fu">json</span>(<span class="fu">list</span>(<span class="at">status =</span> <span class="st">&quot;ok&quot;</span>)))</span>
+<span id="cb2-59"><a href="#cb2-59" tabindex="-1"></a>  }</span>
+<span id="cb2-60"><a href="#cb2-60" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">grepl</span>(<span class="st">&quot;^/v1/jobs/&quot;</span>, path)) {</span>
+<span id="cb2-61"><a href="#cb2-61" tabindex="-1"></a>    <span class="fu">return</span>(<span class="fu">json</span>(<span class="cf">if</span> (approved_yet) payloads<span class="sc">$</span>done <span class="cf">else</span> payloads<span class="sc">$</span>review))</span>
+<span id="cb2-62"><a href="#cb2-62" tabindex="-1"></a>  }</span>
+<span id="cb2-63"><a href="#cb2-63" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">grepl</span>(<span class="st">&quot;documents/export&quot;</span>, path)) {</span>
+<span id="cb2-64"><a href="#cb2-64" tabindex="-1"></a>    <span class="fu">return</span>(httr2<span class="sc">::</span><span class="fu">response</span>(<span class="dv">200</span><span class="dt">L</span>, <span class="at">body =</span> <span class="fu">charToRaw</span>(<span class="st">&quot;PK</span><span class="sc">\003\004</span><span class="st"> ...docx bytes...&quot;</span>)))</span>
+<span id="cb2-65"><a href="#cb2-65" tabindex="-1"></a>  }</span>
+<span id="cb2-66"><a href="#cb2-66" tabindex="-1"></a>  <span class="fu">stop</span>(<span class="st">&quot;unrecorded call: &quot;</span>, path)</span>
+<span id="cb2-67"><a href="#cb2-67" tabindex="-1"></a>}</span></code></pre></div>
+</div>
+<div id="the-client" class="section level2">
+<h2>The client</h2>
+<p>In real use you write this and nothing else:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>client <span class="ot">&lt;-</span> <span class="fu">sd_client</span>() <span class="co"># reads SUPERDOCS_API_KEY</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">sd_verify_key</span>(client) <span class="co"># cheap check that the key works</span></span></code></pre></div>
+<p>Keep the key in <code>~/.Renviron</code>, never in the script. Here
+we point at the recorded transport instead, and cap the client at three
+operations so a mistake in this vignette could not cost anything even if
+it were live:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>client <span class="ot">&lt;-</span> <span class="fu">sd_client</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">api_key =</span> <span class="st">&quot;sk_not_a_real_key&quot;</span>,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">budget =</span> <span class="fu">sd_budget</span>(<span class="at">max_operations =</span> <span class="dv">3</span>, <span class="at">max_pages =</span> <span class="dv">40</span>),</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">transport =</span> transport</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>)</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>client</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; &lt;sd_client&gt;</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt;   base url:  https://api.superdocs.app</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;   api key:   sk_no*********key</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt;   transport: custom (offline)</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt;   budget:    0 of 3 operations used</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt;              max 40 estimated pages per document</span></span></code></pre></div>
+</div>
+<div id="upload-the-rendered-paper" class="section level2">
+<h2>Upload the rendered paper</h2>
+<p><code>sd_upload()</code> streams the file from disk rather than
+reading it into R, so a long manuscript with figures does not have to
+fit in memory twice. Uploading is not billable.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>manuscript <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.docx&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">writeBin</span>(<span class="fu">charToRaw</span>(<span class="st">&quot;PK... a rendered manuscript ...&quot;</span>), manuscript)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">sd_upload</span>(manuscript, client, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>doc</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; &lt;sd_document&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;   session:  paper-2026</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;   file:     manuscript.docx</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt;   chunks:   96</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;   page:     portrait 8.27in x 11.69in</span></span></code></pre></div>
+<p>The session id is yours to choose and worth choosing deliberately: it
+is how you come back to this document tomorrow, or after R crashes.</p>
+</div>
+<div id="ask-for-a-targeted-edit" class="section level2">
+<h2>Ask for a targeted edit</h2>
+<p>Targeted instructions land better than sweeping ones. “Improve the
+paper” gives the model licence to rewrite your argument; the instruction
+below does not.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_edit</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  doc,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">paste</span>(</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>    <span class="st">&quot;In the discussion, replace vague intensifiers with the reported statistics,&quot;</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>    <span class="st">&quot;and remove any causal claim the results section does not support.&quot;</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>    <span class="st">&quot;Do not touch the methods, the citations, or the numbers.&quot;</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  )</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>)</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>job</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; &lt;sd_job&gt;</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt;   job:      job_7f3a</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt;   session:  paper-2026</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt;   status:   pending</span></span></code></pre></div>
+<p><code>approval_mode</code> defaults to <code>&quot;ask_every_time&quot;</code>.
+Nothing has changed in the document yet.</p>
+</div>
+<div id="wait-for-it" class="section level2">
+<h2>Wait for it</h2>
+<p>An edit on a real paper takes anywhere from ten seconds to several
+minutes, with nothing visible in between. That is the API working.
+<code>sd_wait()</code> polls with exponential backoff so a long job is
+not hammered, and gives up on your schedule rather than the
+server’s:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_wait</span>(job, <span class="at">timeout =</span> <span class="dv">300</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>job<span class="sc">$</span>status</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;awaiting_approval&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="fu">sd_awaiting_kind</span>(job)</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;change_review&quot;</span></span></code></pre></div>
+<p>Two different pauses report <code>awaiting_approval</code>, which is
+why <code>sd_awaiting_kind()</code> exists. <code>&quot;change_review&quot;</code>
+is answered by <code>sd_approve()</code>; <code>&quot;continue_prompt&quot;</code>
+– a large edit asking whether to keep going – is answered by
+<code>sd_continue()</code>. Sending the wrong one is rejected with a
+409.</p>
+<p>If <code>sd_wait()</code> times out, nothing is lost: the job keeps
+running server-side, and <code>sd_wait(job)</code> picks it back up.
+Jobs are deleted an hour after they are created, so that is the real
+deadline.</p>
+</div>
+<div id="read-what-it-proposes" class="section level2">
+<h2>Read what it proposes</h2>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>changes <span class="ot">&lt;-</span> <span class="fu">sd_changes</span>(job, <span class="at">refresh =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>changes</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; &lt;sd_changes&gt; 2 proposed change(s) on session paper-2026</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; 1. [edit] ch_1</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt;    why: Replaced an intensifier with the reported statistic</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt;    -   The effect was very significant.</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt;    +   The effect was significant (p = 0.03).</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 2. [delete] ch_2</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt;    why: Removed a causal claim the data does not support</span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt;    -   This clearly proves the mechanism.</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt; Nothing is applied until sd_approve() names the ids you accept.</span></span></code></pre></div>
+<p>It is an ordinary data frame, so you can filter it like one:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>changes[, <span class="fu">c</span>(<span class="st">&quot;change_id&quot;</span>, <span class="st">&quot;operation&quot;</span>, <span class="st">&quot;ai_explanation&quot;</span>)]</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="co">#&gt;   change_id operation                                      ai_explanation</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="co">#&gt; 1      ch_1      edit Replaced an intensifier with the reported statistic</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt; 2      ch_2    delete    Removed a causal claim the data does not support</span></span></code></pre></div>
+<div id="the-second-parse-and-why-you-did-not-have-to-think-about-it" class="section level3">
+<h3>The second parse, and why you did not have to think about it</h3>
+<p>Proposed changes reach a client in two shapes. Some arrive as
+ordinary JSON objects in <code>metadata$pending_changes</code>. The
+batched ones arrive inside <code>metadata$intermediate_responses</code>,
+where the payload sits in a <code>content</code> field that is
+<em>itself a JSON-encoded string</em> – the same double encoding the SSE
+<code>proposed_change_batch</code> event uses.</p>
+<p>Parse the response once and <code>content</code> is still a character
+scalar; every field you read off it comes back empty. That is the single
+most common reason an integration renders a review UI where every row is
+blank. <code>sd_changes()</code> makes the second
+<code>jsonlite::fromJSON()</code> call for you. Here is the raw payload
+it started from:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>raw_event <span class="ot">&lt;-</span> payloads<span class="sc">$</span>review<span class="sc">$</span>metadata<span class="sc">$</span>intermediate_responses[[<span class="dv">2</span>]]</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">substr</span>(raw_event<span class="sc">$</span>content, <span class="dv">1</span>, <span class="dv">60</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt; {&quot;type&quot;:&quot;batch_approval&quot;,&quot;batch_id&quot;:&quot;ch_1&quot;,&quot;batch_total&quot;:2,&quot;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co"># One parse gets you a string. Two gets you the changes.</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="fu">class</span>(raw_event<span class="sc">$</span>content)</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;json&quot;</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="fu">length</span>(jsonlite<span class="sc">::</span><span class="fu">fromJSON</span>(raw_event<span class="sc">$</span>content, <span class="at">simplifyVector =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>changes)</span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span></code></pre></div>
+</div>
+</div>
+<div id="approve-the-part-you-agree-with" class="section level2">
+<h2>Approve the part you agree with</h2>
+<p>This is the gate. <code>change_ids</code> has no default, and there
+is no approve-everything switch, because an unreviewed edit to a paper
+you are about to submit is the whole thing this package exists to
+prevent.</p>
+<p>Here we take the statistic correction and reject the deletion,
+telling the model why:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>keep <span class="ot">&lt;-</span> changes<span class="sc">$</span>change_id[changes<span class="sc">$</span>operation <span class="sc">==</span> <span class="st">&quot;edit&quot;</span>]</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>drop <span class="ot">&lt;-</span> changes<span class="sc">$</span>change_id[changes<span class="sc">$</span>operation <span class="sc">==</span> <span class="st">&quot;delete&quot;</span>]</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_approve</span>(job, keep)</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_deny</span>(job, drop, <span class="at">feedback =</span> <span class="st">&quot;Keep the sentence; soften it instead of cutting it.&quot;</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_wait</span>(job, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>job<span class="sc">$</span>status</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a><span class="co">#&gt; [1] &quot;completed&quot;</span></span></code></pre></div>
+<p>Denying with feedback can produce a revised proposal, so a review can
+go several rounds. Keep polling until the status is
+<code>completed</code>.</p>
+</div>
+<div id="export" class="section level2">
+<h2>Export</h2>
+<p>Exports are free, so export often rather than at the end.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>out <span class="ot">&lt;-</span> <span class="fu">file.path</span>(<span class="fu">tempdir</span>(), <span class="st">&quot;manuscript-revised.docx&quot;</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="fu">sd_export</span>(doc, <span class="at">format =</span> <span class="st">&quot;docx&quot;</span>, <span class="at">path =</span> out)</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="fu">file.size</span>(out) <span class="sc">&gt;</span> <span class="dv">0</span></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p><code>docx</code>, <code>pdf</code>, <code>html</code>,
+<code>markdown</code> and <code>txt</code> are the available formats. If
+the render hit something non-fatal – an image that would not download, a
+diagram that timed out – <code>sd_export()</code> raises an R warning
+carrying the codes rather than handing you a file that quietly lost a
+figure.</p>
+</div>
+<div id="the-knitr-shortcut" class="section level2">
+<h2>The knitr shortcut</h2>
+<p><code>sd_knit()</code> is the whole thing in one call: it renders the
+<code>.Rmd</code> with <code>rmarkdown::render()</code> and then runs
+upload, edit, review, approve, export over the result.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>result <span class="ot">&lt;-</span> <span class="fu">sd_knit</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="st">&quot;paper.Rmd&quot;</span>,</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="st">&quot;Tighten the discussion; keep every citation and number exactly as written.&quot;</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">output_format =</span> <span class="st">&quot;word_document&quot;</span>,</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">export_path =</span> <span class="st">&quot;paper-revised.docx&quot;</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>)</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>result<span class="sc">$</span>changes</span></code></pre></div>
+<p>The review step is a function you supply. The default,
+<code>sd_review_console()</code>, asks you in an interactive session and
+refuses to guess in a script – which means a scheduled job cannot
+approve anything by accident. Two other useful shapes:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="co"># Prepare the work, decide later.</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="fu">sd_knit</span>(<span class="st">&quot;paper.Rmd&quot;</span>, <span class="st">&quot;...&quot;</span>, <span class="at">review =</span> sd_review_none)</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="co"># A rule you can defend: accept wording edits, never accept deletions.</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="fu">sd_knit</span>(<span class="st">&quot;paper.Rmd&quot;</span>, <span class="st">&quot;...&quot;</span>, <span class="at">review =</span> <span class="cf">function</span>(changes) {</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  changes<span class="sc">$</span>change_id[changes<span class="sc">$</span>operation <span class="sc">==</span> <span class="st">&quot;edit&quot;</span>]</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>})</span></code></pre></div>
+<p>Whatever the function returns, every proposed change gets an explicit
+decision – the ids you name are approved and the rest are denied – so a
+job never sits blocking your session waiting for a review nobody is
+going to give.</p>
+</div>
+<div id="not-spending-more-than-you-meant-to" class="section level2">
+<h2>Not spending more than you meant to</h2>
+<p><code>sd_budget()</code> is attached to the client and enforced
+before requests leave your machine.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">sd_ops_used</span>(client)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="co">#&gt; [1] 1</span></span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">sd_ops_remaining</span>(client)</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>tiny <span class="ot">&lt;-</span> <span class="fu">sd_client</span>(<span class="at">api_key =</span> <span class="st">&quot;sk_x&quot;</span>, <span class="at">budget =</span> <span class="fu">sd_budget</span>(<span class="at">max_operations =</span> <span class="dv">0</span>), <span class="at">transport =</span> transport)</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="fu">try</span>(<span class="fu">sd_edit</span>(<span class="fu">sd_document</span>(tiny, <span class="st">&quot;paper-2026&quot;</span>), <span class="st">&quot;Rewrite everything.&quot;</span>))</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co">#&gt; Error : Operation budget exhausted: this client has spent 0 of 0 operations and the edit needs 1 more.</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt;   Fix: raise it with sd_client(budget = sd_budget(max_operations = N)), or start a new client. The cap exists so a loop cannot drain your quota.</span></span></code></pre></div>
+<p><code>max_pages</code> refuses an oversized document after the free
+upload and before any billable edit. The API reports chunks, not pages,
+so the gate compares against
+<code>ceiling(chunks_count / chunks_per_page)</code> – an estimate, with
+a default of 12 chunks per page that suits a double-spaced manuscript.
+Tune it for your documents:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>strict <span class="ot">&lt;-</span> <span class="fu">sd_client</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">api_key =</span> <span class="st">&quot;sk_x&quot;</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">budget =</span> <span class="fu">sd_budget</span>(<span class="at">max_pages =</span> <span class="dv">5</span>, <span class="at">chunks_per_page =</span> <span class="dv">12</span>),</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">transport =</span> transport</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="fu">try</span>(<span class="fu">sd_upload</span>(manuscript, strict, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>))</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co">#&gt; Error : manuscript.docx parsed into 96 chunks, about 8 pages at 12 chunks per page. The budget allows 5.</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt;   Fix: raise max_pages in sd_budget(), tune chunks_per_page for this document&#39;s density, or edit a shorter excerpt first.</span></span></code></pre></div>
+<p>And <code>small_sample = TRUE</code> is the cheap first run: one
+operation, three pages, fastest model tier.</p>
+</div>
+<div id="picking-up-after-a-crash" class="section level2">
+<h2>Picking up after a crash</h2>
+<p>Nothing about the workflow lives only in your R session. The session
+id and the job id are enough to resume:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">sd_document</span>(client, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>job <span class="ot">&lt;-</span> <span class="fu">sd_job</span>(client, <span class="at">job_id =</span> <span class="st">&quot;job_7f3a&quot;</span>, <span class="at">session_id =</span> <span class="st">&quot;paper-2026&quot;</span>)</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="co"># Poll it again to find out where it got to. Here it has already finished.</span></span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a><span class="fu">sd_wait</span>(job, <span class="at">verbose =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>status</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a><span class="co">#&gt; [1] &quot;completed&quot;</span></span></code></pre></div>
+<p>Save both to disk as soon as you have them. A job id older than an
+hour is gone rather than slow – re-run the edit in that case.</p>
+</div>
+<div id="when-something-goes-wrong" class="section level2">
+<h2>When something goes wrong</h2>
+<p>Errors name the cause and the fix, and carry a class so you can
+branch:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>broken <span class="ot">&lt;-</span> <span class="fu">sd_client</span>(</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  <span class="at">api_key =</span> <span class="st">&quot;sk_x&quot;</span>,</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="at">transport =</span> <span class="cf">function</span>(req) {</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>    httr2<span class="sc">::</span><span class="fu">response</span>(</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>      <span class="at">status_code =</span> <span class="dv">415</span>,</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>      <span class="at">headers =</span> <span class="fu">list</span>(<span class="st">`</span><span class="at">Content-Type</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;application/json&quot;</span>),</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>      <span class="at">body =</span> <span class="fu">charToRaw</span>(<span class="st">&#39;{&quot;detail&quot;: &quot;Unsupported file type: .doc&quot;}&#39;</span>)</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>    )</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>  }</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a>)</span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>tex <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.doc&quot;</span>)</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a><span class="fu">writeBin</span>(<span class="fu">charToRaw</span>(<span class="st">&quot;x&quot;</span>), tex)</span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a><span class="fu">sd_upload</span>(tex, broken)</span>
+<span id="cb18-14"><a href="#cb18-14" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb18-15"><a href="#cb18-15" tabindex="-1"></a><span class="co">#&gt; ! SuperDocs does not accept &#39;.doc&#39; as an editable document.</span></span>
+<span id="cb18-16"><a href="#cb18-16" tabindex="-1"></a><span class="co">#&gt;   Fix: use one of .pdf, .docx, .txt, .rtf, .md, .html, .htm. Convert legacy .doc to .docx first.</span></span></code></pre></div>
+<p>That one never reached the network: the extension check runs locally.
+The classes are <code>sd_api_error</code> (plus
+<code>sd_http_&lt;status&gt;</code>), <code>sd_budget_error</code>,
+<code>sd_timeout_error</code> and <code>sd_job_failed</code>.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

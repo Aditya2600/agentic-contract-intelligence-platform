@@ -56,6 +56,9 @@ tmp/
 temp/
 uploads/
 
+# Bind mount for the compose `watcher`/`api` services (docker-compose.yml)
+/watched/
+
 # Operating System & IDE
 .DS_Store
 .DS_Store?
@@ -68,3 +71,18 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# AI / agent tooling state. Local session and index caches, not project source: they
+# are large, machine-specific, and can carry file contents a reviewer never chose to
+# publish.
+.serena/
+.claude/
+.aider*
+.cursor/
+.continue/
+.windsurf/
+CLAUDE.local.md
+
+# Design reference screenshots (competitor captures, before/after diffs) — large
+# binaries pulled in for a redesign pass, not project source.
+design-references/

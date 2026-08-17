@@ -20,6 +20,7 @@ from doctask.domain import (
     StageRecord,
     StaleProposal,
     StoredFact,
+    WatchedCollection,
 )
 
 
@@ -29,6 +30,17 @@ class CollectionConflictError(ValueError):
     Raised instead of silently renaming the existing row: a caller who repeats their
     own request must get the same collection back, but a caller who reuses somebody
     else's slug by accident needs to find out, not overwrite their name.
+    """
+
+
+class ItemAlreadyDecidedError(ValueError):
+    """A review item's compare-and-set lost: it was already decided, by a different
+    actor or with a different verdict than the one just presented.
+
+    A subclass of `ValueError` rather than a sibling of it, so the REST layer's
+    existing `except (..., ValueError)` continues to answer it exactly as before; the
+    MCP layer catches this specific type to give the caller something more precise
+    than "a ValueError happened".
     """
 
 
@@ -68,6 +80,13 @@ class Repository(Protocol):
     # omitted. Same slug, same name: returns the existing collection. Same slug, a
     # different name: raises `CollectionConflictError` rather than renaming it.
     async def create_collection(self, name: str, *, slug: str | None = None) -> UUID: ...
+    # The directory documents for this collection arrive in, or None to stop watching it.
+    async def set_collection_watch_path(
+        self, collection_id: UUID, watch_path: str | None
+    ) -> None: ...
+    # Every collection that named a directory. The watcher's entire work list, read
+    # fresh each poll so a path added while it runs is picked up without a restart.
+    async def list_watched_collections(self) -> list[WatchedCollection]: ...
     async def create_run(
         self,
         *,
@@ -76,7 +95,21 @@ class Repository(Protocol):
         idempotency_key: str,
         trigger: str = "api",
     ) -> tuple[UUID, bool]: ...
+    # The run this collection already has under this key, or None. Reads the uniqueness
+    # constraint that `create_run` enforces, so a caller that can derive the key from
+    # what it holds can find out whether the work is already done without redoing it.
+    async def find_run_by_idempotency_key(
+        self, collection_id: UUID, idempotency_key: str
+    ) -> UUID | None: ...
     async def block_run(self, run_id: UUID, reason: str) -> None: ...
+    # Park the run as failed. Nothing was committed; the row is the durable record that
+    # this input was attempted, which is what stops it being attempted again forever.
+    async def fail_run(self, run_id: UUID, reason: str) -> None: ...
+    # The document this run was started over, once the run has stored one.
+    async def set_run_trigger_document(self, run_id: UUID, document_id: UUID) -> None: ...
+    # The ruleset `pin_ruleset` resolved for this run, once the graph has reported it
+    # back. Written once; a run's playbook does not change mid-run.
+    async def set_run_ruleset(self, run_id: UUID, ruleset_id: UUID) -> None: ...
     async def put_document(self, document: Document) -> tuple[Document, bool]: ...
     async def get_document(self, document_id: UUID) -> Document | None: ...
     async def set_document_type(
@@ -97,6 +130,11 @@ class Repository(Protocol):
     async def get_blocks_by_ids(self, block_ids: list[UUID]) -> dict[UUID, Block]: ...
     async def put_facts(self, collection_id: UUID, facts: list[FactCandidate]) -> list[FactCandidate]: ...
     async def get_active_facts(self, collection_id: UUID, keys: list[str]) -> list[StoredFact]: ...
+    # Facts by id, for a caller that already holds specific ids -- a register item's
+    # `citation_fact_ids` -- rather than a key to search by. Missing ids are omitted,
+    # not errors: a citation into a fact this run's caller cannot see is still a fact
+    # that existed once, and the export it supports should not fail over it.
+    async def get_facts_by_ids(self, fact_ids: list[UUID]) -> dict[UUID, StoredFact]: ...
     # Both sides speak `RegisterKey.text`: "AGREEMENT::key", or "::key" when the
     # collection names no agreement. A bare obligation key addresses no row.
     async def affected_register_keys(
@@ -176,6 +214,11 @@ class Repository(Protocol):
     async def list_register(self, collection_id: UUID) -> list[RegisterItem]: ...
     # --- read access for callers that only hold a run id -----------------------
     async def get_run(self, run_id: UUID) -> RunSummary | None: ...
+    # A collection's runs, newest first, optionally narrowed to one status -- how a
+    # caller that started nothing finds what the watcher started and is waiting on it.
+    async def list_runs(
+        self, collection_id: UUID, *, status: str | None = None
+    ) -> list[RunSummary]: ...
     # The register rows this run actually changed: old value, new value, both hashes.
     # Sourced from `change_log`, written in the same transaction as the commit that
     # produced it, so this never disagrees with what was actually written.

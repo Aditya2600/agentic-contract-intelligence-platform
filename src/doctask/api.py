@@ -19,16 +19,22 @@ from doctask.runtime import (
     IdempotencyConflictError,
     RulesetConflictError,
     RunBusyError,
+    RunClosedError,
+    RunNotFoundError,
     StaleDecisionError,
     decide_reviewed_items,
+    export_register,
+    get_run_cost_report,
+    get_run_stages,
     get_run_status,
     get_services,
+    ingest_file,
     install_ruleset,
     override_run_blockers,
     rederive_run,
     start_run,
 )
-from doctask.services.extraction import ExtractionError, extract_document
+from doctask.services.extraction import ExtractionError
 
 router = APIRouter()
 
@@ -70,6 +76,13 @@ class CollectionCreate(BaseModel):
     # the same slug and name returns the existing collection; the same slug with a
     # different name is refused rather than silently renamed.
     slug: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class WatchPathUpdate(BaseModel):
+    # None (or omitted) stops the watcher polling this collection. The next sweep
+    # simply no longer lists it -- there is nothing else to clean up, because the
+    # watcher holds no state of its own for a collection it stops watching.
+    watch_path: str | None = None
 
 
 class DocumentPayload(BaseModel):
@@ -129,6 +142,25 @@ async def create_collection(
     return {"collection_id": str(collection_id)}
 
 
+@router.put("/collections/{collection_id}/watch-path")
+async def put_watch_path(
+    collection_id: UUID, payload: WatchPathUpdate, principal: Caller
+) -> dict:
+    """Name (or clear) the directory the collection watcher polls for this collection.
+
+    Takes effect on the watcher's next sweep: `list_watched_collections` is read fresh
+    every poll, so nothing here needs to signal a running watcher process directly.
+    """
+    services = await get_services()
+    try:
+        await services.repository.set_collection_watch_path(
+            collection_id, payload.watch_path
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"collection_id": str(collection_id), "watch_path": payload.watch_path}
+
+
 @router.post("/runs")
 async def create_run(
     payload: RunCreate, principal: Caller
@@ -139,6 +171,8 @@ async def create_run(
         filename=payload.document.filename,
         mime_type=payload.document.mime_type,
         text=payload.document.text,
+        trigger="api",
+        principal=principal,
     )
     return {"run_id": str(run_id), "result": result}
 
@@ -152,32 +186,28 @@ async def upload_run(
 ) -> dict:
     """Start a run from a PDF, DOCX or TXT file.
 
-    Extraction happens here rather than in the graph so a file this server cannot read
-    never becomes a run at all. A page that neither the native extractor nor the vision
-    model could read is a 422: ingesting it as empty text would produce a register that
-    looks clean because the evidence was missing, which is the one failure mode nobody
-    can see from the report.
+    Extraction happens before the run rather than in the graph so a file this server
+    cannot read never becomes a run at all. A page that neither the native extractor nor
+    the vision model could read is a 422: ingesting it as empty text would produce a
+    register that looks clean because the evidence was missing, which is the one failure
+    mode nobody can see from the report.
+
+    The extract-then-start pair lives in `runtime.ingest_file`, which is also what the
+    collection watcher drives. This endpoint is that function plus HTTP status codes.
     """
-    services = await get_services()
     try:
-        extracted = await extract_document(
+        run_id, extracted, result = await ingest_file(
+            collection_id=collection_id,
+            idempotency_key=idempotency_key,
             filename=file.filename or "upload",
-            mime_type=file.content_type or "",
+            mime_type=file.content_type or "application/octet-stream",
             data=await file.read(),
-            ocr=services.model,
+            trigger="api",
+            principal=principal,
         )
     except ExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    run_id, result = await start_run(
-        collection_id=collection_id,
-        idempotency_key=idempotency_key,
-        filename=file.filename or "upload",
-        mime_type=file.content_type or "application/octet-stream",
-        text=extracted.text,
-        blocks=[asdict(block) for block in extracted.blocks],
-        extraction_warnings=extracted.warnings,
-    )
     return {
         "run_id": str(run_id),
         "extraction_methods": sorted(extracted.methods),
@@ -268,11 +298,19 @@ async def resume(
             principal=reviewer,
             document_type=payload.document_type,
         )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RunBusyError as exc:
         # Another process holds the run's lease. Retrying is the right response, and it
         # is a different answer from "your decision was rejected".
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (IdempotencyConflictError, StaleDecisionError, KeyError, ValueError) as exc:
+    except (
+        RunClosedError,
+        IdempotencyConflictError,
+        StaleDecisionError,
+        KeyError,
+        ValueError,
+    ) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -291,11 +329,13 @@ async def override_blockers(
             idempotency_key=payload.idempotency_key,
             principal=reviewer,
         )
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RunBusyError as exc:
         # Another process holds the run's lease. Retrying is the right response, and it
         # is a different answer from "your decision was rejected".
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (IdempotencyConflictError, KeyError, ValueError) as exc:
+    except (RunClosedError, IdempotencyConflictError, KeyError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -307,10 +347,41 @@ async def get_status(run_id: UUID, principal: Caller) -> dict:
     return status
 
 
+@router.get("/runs/{run_id}/stages")
+async def get_stages(run_id: UUID, principal: Caller) -> list[dict]:
+    """This run's ordered stage history from the exactly-once ledger: what each stage was
+    given, what it produced, and how many times it executed. `GET /runs/{id}/status`
+    answers "where is it now"; this answers "what has it already done, exactly once"."""
+    try:
+        return await get_run_stages(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/cost")
+async def get_cost_report(run_id: UUID, principal: Caller) -> dict:
+    """What this run cost and where the time went: see `runtime.get_run_cost_report`."""
+    try:
+        return await get_run_cost_report(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/collections/{collection_id}/register")
 async def get_register(collection_id: UUID, principal: Caller) -> list[dict]:
     services = await get_services()
     return [asdict(item) for item in await services.repository.list_register(collection_id)]
+
+
+@router.get("/collections/{collection_id}/runs/{run_id}/export")
+async def get_export(collection_id: UUID, run_id: UUID, principal: Caller) -> dict:
+    """The collection's register as a self-contained artifact, evidence and all: see
+    `runtime.export_register`. The MCP tool of the same name is this same function --
+    one implementation, two ways in."""
+    try:
+        return await export_register(collection_id, run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/runs/{run_id}/changes")
