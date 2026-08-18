@@ -34,6 +34,7 @@ from doctask.runtime import (
     rederive_run,
     start_run,
 )
+from doctask.services.casing import camelize
 from doctask.services.extraction import ExtractionError
 
 router = APIRouter()
@@ -68,6 +69,57 @@ async def current_reviewer(
 
 Caller = Annotated[Principal, Depends(current_principal)]
 Reviewer = Annotated[Principal, Depends(current_reviewer)]
+
+
+async def _serialize_collection(services, summary) -> dict:
+    """A `CollectionSummary` row plus its active playbook, camelCased for the web
+    client. Kept separate from the repository layer, which has no reason to know
+    what a ruleset's rules look like rendered as playbook cards."""
+    ruleset = await services.repository.get_active_ruleset(summary.id)
+    playbook = (
+        [
+            {
+                "rule_code": rule.code,
+                "title": rule.text,
+                "severity": rule.severity,
+                "description": rule.text,
+                "enabled": True,
+            }
+            for rule in ruleset.rules
+        ]
+        if ruleset is not None
+        else []
+    )
+    return camelize({**asdict(summary), "playbook": playbook})
+
+
+async def _serialize_run(run) -> dict:
+    """A `RunSummary` row enriched with the fields the web client's `Run` type needs
+    but the stored row does not carry on its own: current stage and pending-review
+    count (derived from events + review items, same as `GET .../status`), spend and
+    duration (derived from events + the stage ledger, same as `GET .../cost`)."""
+    status = await get_run_status(run.run_id)
+    cost = await get_run_cost_report(run.run_id)
+    gate_reason = None
+    if status is not None and status["status"] in {"blocked", "awaiting_review"}:
+        services = await get_services()
+        events = await services.repository.list_events(run.run_id)
+        gate_reason = events[-1].reason if events else None
+    return camelize(
+        {
+            "id": run.run_id,
+            "collection_id": run.collection_id,
+            "trigger": run.trigger,
+            "status": status["status"] if status is not None else run.status,
+            "started_at": run.started_at,
+            "duration_ms": cost["total_duration_ms"],
+            "cost_usd": cost["total_spend_usd"],
+            "current_stage": status["current_stage"] if status is not None else None,
+            "gate_reason": gate_reason,
+            "price_table_version": cost["price_table_version"],
+            "pending_review_count": status["pending_review_items"] if status is not None else 0,
+        }
+    )
 
 
 class CollectionCreate(BaseModel):
@@ -159,6 +211,69 @@ async def put_watch_path(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"collection_id": str(collection_id), "watch_path": payload.watch_path}
+
+
+@router.get("/collections")
+async def list_collections(principal: Caller) -> list[dict]:
+    services = await get_services()
+    summaries = await services.repository.list_collections()
+    return [await _serialize_collection(services, summary) for summary in summaries]
+
+
+@router.get("/collections/{collection_id}")
+async def get_collection(collection_id: UUID, principal: Caller) -> dict:
+    services = await get_services()
+    summary = await services.repository.get_collection(collection_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"collection {collection_id} does not exist")
+    return await _serialize_collection(services, summary)
+
+
+# The web client's `kind` union only names four of the seven real doc types. The other
+# three (sow, purchase_order, unknown) are passed through as-is rather than mapped onto
+# a wrong bucket -- an unrecognised string is a more honest failure than a fabricated one.
+_DOC_TYPE_TO_KIND = {
+    "master_agreement": "msa",
+    "amendment": "amendment",
+    "invoice": "invoice",
+    "policy": "policy",
+}
+
+
+@router.get("/collections/{collection_id}/documents")
+async def list_documents(collection_id: UUID, principal: Caller) -> list[dict]:
+    services = await get_services()
+    docs = await services.repository.list_documents(collection_id)
+    return [
+        camelize(
+            {
+                "id": doc.id,
+                "collection_id": doc.collection_id,
+                "filename": doc.filename,
+                "kind": _DOC_TYPE_TO_KIND.get(doc.doc_type, doc.doc_type),
+                "pages": doc.pages,
+                "content_hash": doc.sha256,
+                "ingested_at": doc.ingested_at,
+            }
+        )
+        for doc in docs
+    ]
+
+
+@router.get("/collections/{collection_id}/runs")
+async def list_collection_runs(collection_id: UUID, principal: Caller) -> list[dict]:
+    services = await get_services()
+    runs = await services.repository.list_runs(collection_id)
+    return [await _serialize_run(run) for run in runs]
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: UUID, principal: Caller) -> dict:
+    services = await get_services()
+    run = await services.repository.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} does not exist")
+    return await _serialize_run(run)
 
 
 @router.post("/runs")

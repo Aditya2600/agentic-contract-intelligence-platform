@@ -581,6 +581,37 @@ class WatchedCollection:
 
 
 @dataclass(slots=True)
+class CollectionSummary:
+    """What the collection index/detail views need: identity plus counts derived
+    from the other tables, not stored anywhere as its own row."""
+
+    id: UUID
+    name: str
+    slug: str
+    document_count: int
+    register_row_count: int
+    open_run_count: int
+    last_activity_at: datetime | None
+    watch_path: str | None = None
+
+
+@dataclass(slots=True)
+class DocumentSummary:
+    """One row of a collection's document list -- identity and format, not the
+    full text/blocks `get_document` returns for a single document."""
+
+    id: UUID
+    collection_id: UUID
+    filename: str
+    doc_type: DocType
+    sha256: str
+    ingested_at: datetime | None
+    # Distinct block page numbers seen, or 1 for formats that carry no page anchors
+    # (txt/docx) rather than an unset value implying the document has no length.
+    pages: int = 1
+
+
+@dataclass(slots=True)
 class RegisterChange:
     """One register row's value before and after a commit, and which run caused it.
 

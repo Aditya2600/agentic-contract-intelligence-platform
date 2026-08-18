@@ -11,10 +11,12 @@ from psycopg_pool import AsyncConnectionPool
 from doctask.domain import (
     REGISTER_KEY_SEPARATOR,
     Block,
+    CollectionSummary,
     CommitResult,
     Conflict,
     Document,
     DocumentRelation,
+    DocumentSummary,
     EvidenceSpan,
     FactCandidate,
     FactScope,
@@ -120,6 +122,83 @@ class PostgresRepository:
             rows = await cur.fetchall()
         return [
             WatchedCollection(id=row["id"], name=row["name"], watch_path=row["watch_path"])
+            for row in rows
+        ]
+
+    _COLLECTION_SUMMARY_QUERY = """
+        SELECT
+            c.id, c.name, c.slug, c.watch_path,
+            COUNT(DISTINCT d.id) AS document_count,
+            COUNT(DISTINCT ri.id) AS register_row_count,
+            COUNT(DISTINCT r.id) FILTER (
+                WHERE r.status IN ('running', 'awaiting_review', 'committing', 'blocked')
+            ) AS open_run_count,
+            GREATEST(MAX(d.ingested_at), MAX(r.started_at), MAX(r.ended_at)) AS last_activity_at
+        FROM collections c
+        LEFT JOIN documents d ON d.collection_id = c.id
+        LEFT JOIN register_items ri ON ri.collection_id = c.id
+        LEFT JOIN runs r ON r.collection_id = c.id
+        {where}
+        GROUP BY c.id
+        ORDER BY c.name
+    """
+
+    @staticmethod
+    def _collection_summary(row: dict) -> CollectionSummary:
+        return CollectionSummary(
+            id=row["id"],
+            name=row["name"],
+            slug=row["slug"],
+            document_count=row["document_count"],
+            register_row_count=row["register_row_count"],
+            open_run_count=row["open_run_count"],
+            last_activity_at=row["last_activity_at"],
+            watch_path=row["watch_path"],
+        )
+
+    async def list_collections(self) -> list[CollectionSummary]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(self._COLLECTION_SUMMARY_QUERY.format(where=""))
+            rows = await cur.fetchall()
+        return [self._collection_summary(row) for row in rows]
+
+    async def get_collection(self, collection_id: UUID) -> CollectionSummary | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                self._COLLECTION_SUMMARY_QUERY.format(where="WHERE c.id = %s"),
+                (collection_id,),
+            )
+            row = await cur.fetchone()
+        return self._collection_summary(row) if row is not None else None
+
+    async def list_documents(self, collection_id: UUID) -> list[DocumentSummary]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT
+                    d.id, d.collection_id, d.filename, d.doc_type, d.sha256, d.ingested_at,
+                    GREATEST(
+                        COUNT(DISTINCT b.page) FILTER (WHERE b.page IS NOT NULL), 1
+                    ) AS pages
+                FROM documents d
+                LEFT JOIN document_blocks b ON b.document_id = d.id
+                WHERE d.collection_id = %s
+                GROUP BY d.id
+                ORDER BY d.ingested_at DESC
+                """,
+                (collection_id,),
+            )
+            rows = await cur.fetchall()
+        return [
+            DocumentSummary(
+                id=row["id"],
+                collection_id=row["collection_id"],
+                filename=row["filename"],
+                doc_type=row["doc_type"],
+                sha256=row["sha256"],
+                ingested_at=row["ingested_at"],
+                pages=row["pages"],
+            )
             for row in rows
         ]
 

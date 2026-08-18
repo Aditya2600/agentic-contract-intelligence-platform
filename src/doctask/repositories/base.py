@@ -5,10 +5,12 @@ from uuid import UUID
 
 from doctask.domain import (
     Block,
+    CollectionSummary,
     CommitResult,
     Conflict,
     Document,
     DocumentRelation,
+    DocumentSummary,
     FactCandidate,
     Finding,
     RegisterChange,
@@ -87,6 +89,13 @@ class Repository(Protocol):
     # Every collection that named a directory. The watcher's entire work list, read
     # fresh each poll so a path added while it runs is picked up without a restart.
     async def list_watched_collections(self) -> list[WatchedCollection]: ...
+    # Every collection, with counts derived from documents/register/runs -- the
+    # index view. `get_collection` is the same row, narrowed to one id.
+    async def list_collections(self) -> list[CollectionSummary]: ...
+    async def get_collection(self, collection_id: UUID) -> CollectionSummary | None: ...
+    # A collection's documents, newest first. Summary only -- text and blocks stay
+    # behind `get_document`, which a caller reaches by document id.
+    async def list_documents(self, collection_id: UUID) -> list[DocumentSummary]: ...
     async def create_run(
         self,
         *,

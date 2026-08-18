@@ -7,10 +7,12 @@ from uuid import UUID, uuid4
 
 from doctask.domain import (
     Block,
+    CollectionSummary,
     CommitResult,
     Conflict,
     Document,
     DocumentRelation,
+    DocumentSummary,
     FactCandidate,
     Finding,
     RegisterChange,
@@ -37,10 +39,12 @@ class InMemoryRepository:
     def __init__(self) -> None:
         self.collections: dict[UUID, str] = {}
         self.collection_by_slug: dict[str, UUID] = {}
+        self.collection_slug: dict[UUID, str] = {}
         # collection_id -> the directory the watcher polls for it.
         self.collection_watch_path: dict[UUID, str] = {}
         self.documents: dict[UUID, Document] = {}
         self.document_by_sha: dict[tuple[UUID, str], UUID] = {}
+        self.document_ingested_at: dict[UUID, datetime] = {}
         self.supersedes: dict[UUID, UUID] = {}
         self.relations: dict[UUID, list[DocumentRelation]] = defaultdict(list)
         self.blocks: dict[UUID, Block] = {}
@@ -86,6 +90,7 @@ class InMemoryRepository:
             collection_id = uuid4()
             self.collections[collection_id] = name
             self.collection_by_slug[slug] = collection_id
+            self.collection_slug[collection_id] = slug
             return collection_id
 
     async def set_collection_watch_path(
@@ -108,6 +113,83 @@ class InMemoryRepository:
             )
             if collection_id in self.collections
         ]
+
+    def _collection_summary(self, collection_id: UUID) -> CollectionSummary | None:
+        name = self.collections.get(collection_id)
+        if name is None:
+            return None
+        document_ids = [
+            doc.id for doc in self.documents.values() if doc.collection_id == collection_id
+        ]
+        run_ids = [
+            run_id
+            for (cid, _key), run_id in self.runs.items()
+            if cid == collection_id
+        ]
+        open_statuses = {"running", "awaiting_review", "committing", "blocked"}
+        open_run_count = sum(
+            1 for run_id in run_ids if self.run_status.get(run_id) in open_statuses
+        )
+        activity_stamps = [
+            self.document_ingested_at[doc_id]
+            for doc_id in document_ids
+            if doc_id in self.document_ingested_at
+        ]
+        activity_stamps += [
+            stamp
+            for run_id in run_ids
+            for stamp in (self.run_started.get(run_id), self.run_ended.get(run_id))
+            if stamp is not None
+        ]
+        register_row_count = sum(
+            1 for (cid, _key) in self.register if cid == collection_id
+        )
+        return CollectionSummary(
+            id=collection_id,
+            name=name,
+            slug=self.collection_slug.get(collection_id, ""),
+            document_count=len(document_ids),
+            register_row_count=register_row_count,
+            open_run_count=open_run_count,
+            last_activity_at=max(activity_stamps) if activity_stamps else None,
+            watch_path=self.collection_watch_path.get(collection_id),
+        )
+
+    async def list_collections(self) -> list[CollectionSummary]:
+        summaries = [self._collection_summary(cid) for cid in self.collections]
+        return sorted(
+            (s for s in summaries if s is not None), key=lambda s: s.name
+        )
+
+    async def get_collection(self, collection_id: UUID) -> CollectionSummary | None:
+        return self._collection_summary(collection_id)
+
+    async def list_documents(self, collection_id: UUID) -> list[DocumentSummary]:
+        summaries = []
+        for doc in self.documents.values():
+            if doc.collection_id != collection_id:
+                continue
+            pages = {
+                block.page
+                for block in self.blocks.values()
+                if block.document_id == doc.id and block.page is not None
+            }
+            summaries.append(
+                DocumentSummary(
+                    id=doc.id,
+                    collection_id=doc.collection_id,
+                    filename=doc.filename,
+                    doc_type=doc.doc_type,
+                    sha256=doc.sha256,
+                    ingested_at=self.document_ingested_at.get(doc.id),
+                    pages=len(pages) or 1,
+                )
+            )
+        return sorted(
+            summaries,
+            key=lambda s: s.ingested_at or datetime.min.replace(tzinfo=UTC),
+            reverse=True,
+        )
 
     async def create_run(
         self, *, collection_id: UUID, run_id: UUID, idempotency_key: str, trigger: str = "api"
@@ -151,6 +233,7 @@ class InMemoryRepository:
                 return self.documents[existing_id], True
             self.documents[document.id] = document
             self.document_by_sha[key] = document.id
+            self.document_ingested_at[document.id] = datetime.now(UTC)
             return document, False
 
     async def get_document(self, document_id: UUID) -> Document | None:

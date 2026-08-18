@@ -193,6 +193,11 @@ indistinguishable from a rule that passed.
 
 ## 4. The pipeline, stage by stage
 
+![DocTask agentic workflow: pin_ruleset through ingest, classify, parse_blocks, link_documents, detect_injection, extract_facts, validate_citations, apply_source_rules, diff_against_register, detect_conflicts, assemble_proposals, Gate 1 await_review, build_candidate_register, apply_deliverable_rules, assemble_findings, Gate 2 await_finding_review, enforce_blockers, verify_review_binding, commit_approved, snapshot_diff_report, with exception paths to short_circuit, mark_unsupported, and the various report end-states](DockTask_Agentic_Workflow.png)
+
+<details>
+<summary>Text-form pipeline diagram (for accessibility / diffing)</summary>
+
 ```text
   [ start run ]
        │
@@ -247,6 +252,8 @@ indistinguishable from a rule that passed.
        ▼
   commit_approved  ──►  snapshot_diff_report  ──►  [ end ]
 ```
+
+</details>
 
 ### `pin_ruleset`
 Resolves the active playbook once, at run start, and records its id and `sha256` in the
